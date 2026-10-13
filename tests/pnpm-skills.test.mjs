@@ -1,25 +1,19 @@
 import { expect, test } from "bun:test";
-import { execFileSync, spawnSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { packSkills } from "../tools/pack-skills.mjs";
+import { runPnpm } from "../tools/pnpm.mjs";
 import { validateSkillsTree, walk } from "../tools/validate-skills.mjs";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 const sourceSkills = join(repoRoot, "plugins/pstack/skills");
 const sourcePackage = JSON.parse(readFileSync(join(repoRoot, "package.json"), "utf8"));
-const packageName = `${sourcePackage.name}-skills`;
-function runPnpm(args, options = {}) {
-  let result = spawnSync("pnpm", args, { encoding: "utf8", ...options });
-  // pnpm 12's npm package can expose a shebang-less bootstrap script before
-  // its native binary is installed. A POSIX shell handles that entry point.
-  if (result.error?.code === "ENOEXEC" && process.platform !== "win32") {
-    result = spawnSync("sh", ["-c", 'exec pnpm "$@"', "pnpm", ...args], { encoding: "utf8", ...options });
-  }
-  return result;
-}
+const packageName = sourcePackage.name;
+const linkPrefix = `pnpm-${packageName.replace("/", "+")}`;
+const archiveName = `${packageName.replace(/^@/, "").replace("/", "-")}-${sourcePackage.version}.tgz`;
 const pnpmVersion = runPnpm(["--version"]).stdout?.trim();
 const [major, minor] = (pnpmVersion ?? "").split(".").map(Number);
 const supportsSkills = major > 12 || (major === 12 && minor >= 11);
@@ -32,6 +26,7 @@ test("the skills archive carries every resource and license without plugin runti
     const fixture = join(root, "source");
     mkdirSync(fixture);
     cpSync(join(repoRoot, "package.json"), join(fixture, "package.json"));
+    cpSync(join(repoRoot, "README.md"), join(fixture, "README.md"));
     for (const name of ["LICENSE", "LICENSE-cursor-team-kit", "LICENSE-thermos", "NOTICE-skills.md"]) {
       cpSync(join(repoRoot, name), join(fixture, name));
     }
@@ -49,7 +44,9 @@ test("the skills archive carries every resource and license without plugin runti
     const manifest = JSON.parse(readFileSync(join(packed, "package.json"), "utf8"));
     expect(manifest.name).toBe(packageName);
     expect(manifest.version).toBe(sourcePackage.version);
-    expect(manifest.private).toBe(true);
+    expect(manifest.private).toBeUndefined();
+    expect(manifest.publishConfig.access).toBe("public");
+    expect(readFileSync(join(packed, "README.md"))).toEqual(readFileSync(join(repoRoot, "README.md")));
     for (const key of ["dependencies", "peerDependencies", "scripts", "pi"]) expect(manifest[key]).toBeUndefined();
     const installedSkills = join(packed, "skills");
     const resources = (dir) => walk(dir).map((file) => relative(dir, file)).filter((file) => !file.endsWith(".DS_Store"));
@@ -63,7 +60,7 @@ test("the skills archive carries every resource and license without plugin runti
       expect(readFileSync(join(packed, name))).toEqual(readFileSync(join(repoRoot, name)));
     }
     validateSkillsTree(installedSkills);
-    expect(readdirSync(join(root, "output"))).toEqual([`${packageName}-${sourcePackage.version}.tgz`]);
+    expect(readdirSync(join(root, "output"))).toEqual([archiveName]);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -75,7 +72,7 @@ test.skipIf(!supportsSkills && !process.env.PSTACK_REQUIRE_PNPM_SKILLS)("pnpm ap
   try {
     const vendor = join(root, "vendor");
     const archive = packSkills(repoRoot, vendor);
-    writeFileSync(join(root, "package.json"), `${JSON.stringify({ private: true, devDependencies: {
+    writeFileSync(join(root, "package.json"), `${JSON.stringify({ private: true, packageManager: sourcePackage.packageManager, devDependencies: {
       [packageName]: `file:vendor/${relative(vendor, archive)}`,
     } })}\n`);
     const settings = "skills:\n  dirs:\n    - .agents/skills\n    - .claude/skills\n";
@@ -88,20 +85,20 @@ test.skipIf(!supportsSkills && !process.env.PSTACK_REQUIRE_PNPM_SKILLS)("pnpm ap
     const skillNames = readdirSync(sourceSkills).filter((name) => existsSync(join(sourceSkills, name, "SKILL.md")));
     writeFileSync(workspace, settings);
     install();
-    expect(existsSync(join(root, `.agents/skills/pnpm-${packageName}-poteto-mode`))).toBe(false);
+    expect(existsSync(join(root, `.agents/skills/${linkPrefix}-poteto-mode`))).toBe(false);
 
     writeFileSync(workspace, settings + permission(true));
     install("--frozen-lockfile");
     for (const dir of [".agents/skills", ".claude/skills"]) {
       const skills = join(root, dir);
       for (const name of skillNames) {
-        const link = join(skills, `pnpm-${packageName}-${name}`);
+        const link = join(skills, `${linkPrefix}-${name}`);
         expect(lstatSync(link).isSymbolicLink()).toBe(true);
         expect(readFileSync(join(link, "SKILL.md"))).toEqual(readFileSync(join(sourceSkills, name, "SKILL.md")));
       }
       // Resolve a real cross-skill path through the installed symlink, including
       // a principle leaf. pnpm's prefixed link names must not break siblings.
-      const architect = join(skills, `pnpm-${packageName}-architect`);
+      const architect = join(skills, `${linkPrefix}-architect`);
       for (const file of ["../poteto-mode/references/t3-tools.md", "../principle-model-the-domain/SKILL.md"]) {
         expect(readFileSync(`${architect}/${file}`).length).toBeGreaterThan(0);
       }
@@ -110,10 +107,10 @@ test.skipIf(!supportsSkills && !process.env.PSTACK_REQUIRE_PNPM_SKILLS)("pnpm ap
     expect(readFileSync(join(root, "pnpm-lock.yaml"), "utf8")).toContain("integrity:");
     rmSync(join(root, "node_modules"), { recursive: true, force: true });
     install("--offline", "--frozen-lockfile");
-    expect(readFileSync(join(root, `.agents/skills/pnpm-${packageName}-poteto-mode/SKILL.md`)).length).toBeGreaterThan(0);
+    expect(readFileSync(join(root, `.agents/skills/${linkPrefix}-poteto-mode/SKILL.md`)).length).toBeGreaterThan(0);
     writeFileSync(workspace, settings + permission(false));
     install("--frozen-lockfile");
-    expect(existsSync(join(root, `.agents/skills/pnpm-${packageName}-poteto-mode`))).toBe(false);
+    expect(existsSync(join(root, `.agents/skills/${linkPrefix}-poteto-mode`))).toBe(false);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
