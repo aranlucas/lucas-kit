@@ -1,5 +1,7 @@
 # NOTICE
 
+Lucas Kit is Lucas's fork of [t3-pstack](https://github.com/chhoumann/t3-pstack). This fork's modifications and additions are (c) 2026 Lucas under the [MIT license](LICENSE). The upstream provenance follows.
+
 t3-pstack is a fork of [pstack-claude](https://github.com/michael-denyer/pstack-claude) (c) 2026 Michael Denyer, itself a port of [pstack](https://github.com/cursor/plugins/tree/main/pstack) (c) 2026 Lauren Tan (poteto). The T3 overlay's modifications and additions are (c) 2026 Christian Bager Bach Houmann and are released under the same [MIT license](LICENSE).
 
 This plugin is a port of upstream MIT-licensed work. The port's modifications and additions are (c) 2026 Michael Denyer and are also released under the [MIT license](LICENSE). All upstream copyright notices and license terms are preserved.

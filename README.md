@@ -1,30 +1,42 @@
-# t3-pstack
+# lucas-kit
+
+Lucas's fork of [t3-pstack](https://github.com/chhoumann/t3-pstack), maintained as **Lucas Kit**. The plugin and marketplace id is `lucas-kit`; the vendored package is `lucas-kit-skills`.
 
 pstack for [T3 Code](https://github.com/pingdotgg/t3code). It is [pstack-claude](https://github.com/michael-denyer/pstack-claude), Michael Denyer's Claude Code and Codex port of Lauren Tan's (poteto's) [pstack](https://github.com/cursor/plugins/tree/main/pstack), with one change: every subagent, panel, fan-out, schedule, and PR watch dispatches through T3's `t3-code` MCP tools. An `interrogate`, `arena`, or `architect` panel can then run Claude, GPT, and Grok reviewers side by side, from a Claude Code thread or a Codex thread. The mapping lives in [`t3-tools.md`](plugins/pstack/skills/poteto-mode/references/t3-tools.md).
 
-t3-pstack works only inside T3. Outside T3, use pstack-claude.
+lucas-kit works only inside T3. Outside T3, use pstack-claude.
 
 ## Install
 
 | | Claude Code | Codex |
 | --- | --- | --- |
-| Plugin id | `t3-pstack@t3-pstack` | `t3-pstack@t3-pstack` |
-| Marketplace repo | `chhoumann/t3-pstack` | `chhoumann/t3-pstack` |
+| Plugin id | `lucas-kit@lucas-kit` | `lucas-kit@lucas-kit` |
+| Marketplace repo | `aranlucas/lucas-kit` | `aranlucas/lucas-kit` |
+
+Install from the Lucas Kit repository. For a local installation, replace `aranlucas/lucas-kit` below with this checkout’s absolute path.
 
 ```shell
-claude plugin marketplace add chhoumann/t3-pstack && claude plugin install t3-pstack@t3-pstack
-codex plugin marketplace add chhoumann/t3-pstack && codex plugin add t3-pstack@t3-pstack
+claude plugin marketplace add aranlucas/lucas-kit && claude plugin install lucas-kit@lucas-kit
+codex plugin marketplace add aranlucas/lucas-kit && codex plugin add lucas-kit@lucas-kit
 ```
 
-Then run `/t3-pstack:setup-pstack` in a T3 thread on each machine. It writes `t3-pstack-models.md` in the host's config directory, with one T3 target per role (`<providerInstanceId>/<modelId>` plus that provider's options), and checks it against the machine's `orchestrator_capabilities`.
+Then run `/lucas-kit:setup-pstack` in a T3 thread on each machine. It writes `lucas-kit-models.md` in the host's config directory, with one T3 target per role (`<providerInstanceId>/<modelId>` plus that provider's options), and checks it against the machine's `orchestrator_capabilities`.
 
-t3-pstack and pstack-claude never collide. They differ in plugin name (`t3-pstack` and `pstack`), marketplace (`t3-pstack` and `pstack-claude`), skill and agent namespace, and model sheet (`t3-pstack-models.md` and `pstack-models.md`). Both can be installed at once, though each injects its own routing instruction at session start, so enable one per runtime.
+If you already configured t3-pstack, copy its `t3-pstack-models.md` to `lucas-kit-models.md` in the same host config directory before starting the renamed plugin. Enable one of these forks per runtime so their routing hooks and skills do not overlap.
+
+### Vendor skills with pnpm
+
+For a project-local skills installation, run `npm run pack:skills` in this checkout. It builds `dist/lucas-kit-skills-<version>.tgz` with the root `skills/` layout [pnpm agent skills](https://pnpm.io/agent-skills) requires. Commit that archive under the consuming project's `vendor/` directory and install it as a dev dependency with pnpm 12.11.0 or newer. See [the pnpm vendoring guide](docs/pnpm-skills.md) for directory configuration, approval, and updates.
+
+This archive includes all skill resources and license notices. It is a skills-only install; automatic routing hooks and the Pi extension require the plugin installation above. The skills still require T3 Code's MCP tools. Run `setup-pstack` by name in a T3 thread after installation.
+
+lucas-kit and pstack-claude never collide. They differ in plugin name (`lucas-kit` and `pstack`), marketplace (`lucas-kit` and `pstack-claude`), skill and agent namespace, and model sheet (`lucas-kit-models.md` and `pstack-models.md`). Both can be installed at once, though each injects its own routing instruction at session start, so enable one per runtime.
 
 ## Staying current
 
-`upstream` is pstack-claude. Merge it with `git merge upstream/main`, then run `bun tools/generate.mjs` and `bun test tests/`. The overlay is mostly new files. The design and the list of upstream files it edits are in [`docs/t3-pstack-design.md`](docs/t3-pstack-design.md).
+`upstream` is pstack-claude. Merge it with `git merge upstream/main`, then run `bun tools/generate.mjs` and `bun test tests/`. The overlay is mostly new files. The design and the list of upstream files it edits are in [`docs/lucas-kit-design.md`](docs/lucas-kit-design.md).
 
-The sections below are pstack-claude's documentation, kept as upstream writes it. Their install commands install pstack-claude, not t3-pstack.
+The sections below are pstack-claude's documentation, kept as upstream writes it. Their install commands install pstack-claude, not lucas-kit.
 
 Tell `poteto-mode` your goal and it will invoke the correct workflow for the task. It keeps your code concise, simple and verified.
 
@@ -106,8 +118,9 @@ Thanks for helping make this port better. Bug reports, documentation fixes, and 
 
 ## License
 
-t3-pstack is [MIT-licensed](LICENSE). Its T3 modifications and additions are © 2026 Christian Bager Bach Houmann. It builds on:
+Lucas Kit is [MIT-licensed](LICENSE), maintained by Lucas. This fork's modifications and additions are © 2026 Lucas. It builds on:
 
+- [t3-pstack](https://github.com/chhoumann/t3-pstack), MIT, © 2026 Christian Bager Bach Houmann, the T3 orchestration fork this checkout derives from.
 - [pstack-claude](https://github.com/michael-denyer/pstack-claude), MIT, © 2026 Michael Denyer, the Claude Code, Codex, and Pi port this fork tracks.
 - [pstack](https://github.com/cursor/plugins/tree/main/pstack) in cursor/plugins, MIT, © 2026 Lauren Tan (poteto), the original skill stack.
 - The skills imported from [cursor-team-kit](https://github.com/cursor/plugins/tree/main/cursor-team-kit), MIT, © 2026 Cursor. See [LICENSE-cursor-team-kit](LICENSE-cursor-team-kit).

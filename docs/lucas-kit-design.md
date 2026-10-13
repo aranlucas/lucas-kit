@@ -1,8 +1,8 @@
-# t3-pstack design
+# lucas-kit design
 
 Status: implemented in 1.0.0 (uncommitted). Sections 2 and 4 record the shipped shape; the design review's open questions are resolved in section 7.
 
-t3-pstack is the pstack-claude port with one change: every subagent, panel, fan-out, schedule and PR watch dispatches through T3 Code's `t3-code` MCP tools. It targets T3 only. It has no detection step and no native fallback. Outside T3, use the regular pstack-claude plugin.
+lucas-kit is the pstack-claude port with one change: every subagent, panel, fan-out, schedule and PR watch dispatches through T3 Code's `t3-code` MCP tools. It targets T3 only. It has no detection step and no native fallback. Outside T3, use the regular pstack-claude plugin.
 
 ## 1. Usage first
 
@@ -45,13 +45,13 @@ Overlay ledger. These are the only upstream files we change:
 | File | Change | Merge cost |
 | --- | --- | --- |
 | `tools/runtimes.mjs` | T3 row, last, with `displaces: "Codex"`, plus `checkT3Models` and `t3ModelNamesSection` (about 40 lines, appended) | Low, since it is appended |
-| `tools/generate.mjs` | Let a row have no `manifest`, because T3 ships inside the Claude and Codex manifests. A row's preamble drops the one of the runtime it `displaces`, so a T3-listed skill carries the Copilot and T3 preambles but not Codex's. `stampLeadLine` drops any generator-owned lead line the file no longer owns. A Codex stub omits its pointer when the skill carries the T3 preamble (about 8 lines). `VERSIONED_MANIFESTS` drops the root `plugin.json`, which t3-pstack does not ship | Low |
+| `tools/generate.mjs` | Let a row have no `manifest`, because T3 ships inside the Claude and Codex manifests. A row's preamble drops the one of the runtime it `displaces`, so a T3-listed skill carries the Copilot and T3 preambles but not Codex's. `stampLeadLine` drops any generator-owned lead line the file no longer owns. A Codex stub omits its pointer when the skill carries the T3 preamble (about 8 lines). `VERSIONED_MANIFESTS` drops the root `plugin.json`, which lucas-kit does not ship | Low |
 | `tools/substitutions.json` | The sync denylist's `grok-` token becomes `(?<!/)grok-`, so the T3 target `grok/grok-4.7` passes the sync test that runs the denylist over the installed plugin | Low |
-| `tests/generate.test.mjs`, `tests/sync.test.mjs`, `tests/session-hook.test.mjs`, `tests/session-hook-windows.test.mjs` | Upstream tests learn the T3 row, the `t3-pstack` manifest name, and the `t3-pstack-models.md` sheet name, and the sync fixture copies the sheet script that `runtimes.mjs` imports (about 12 lines) | Low |
+| `tests/generate.test.mjs`, `tests/sync.test.mjs`, `tests/session-hook.test.mjs`, `tests/session-hook-windows.test.mjs` | Upstream tests learn the T3 row, the `lucas-kit` manifest name, and the `lucas-kit-models.md` sheet name, and the sync fixture copies the sheet script that `runtimes.mjs` imports (about 12 lines) | Low |
 | `plugins/pstack/plugin.json` | Deleted. Its Agent Plugins `$schema` makes Codex load the plugin as an Agent Plugin, and Codex truncates each skill it injects from an Agent Plugin to 8,000 bytes, which cuts poteto-mode's `SKILL.md` off mid-sentence. A test in `tests/runtime-packaging.test.mjs` fails while the file exists | Each pstack-claude release stamps the file's version, so each merge conflicts on it: keep the deletion |
 | `plugins/pstack/models.json` | A `t3` block: default, strongest and panel as T3 targets | Low, since it is one new key |
-| Manifests, marketplaces, `README.md` | `t3-pstack` plugin and marketplace names, author, and install text, in every manifest including Copilot's, which the generator requires to share the Claude Code manifest's name | Low |
-| `hooks/session-start.sh`, `hooks/session-start.ps1`, `hooks/session-start-context.md` | The `claude` and `codex` arms read `t3-pstack-models.md`, and the context tells each session to read `t3-tools.md` and the sheet. t3-pstack does not support GitHub Copilot: the `copilot` arm is carried only to keep merges cheap, and since it wraps the same context file it would print the T3 mandate | Low |
+| Manifests, marketplaces, `README.md` | `lucas-kit` plugin and marketplace names, author, and install text, in every manifest including Copilot's, which the generator requires to share the Claude Code manifest's name | Low |
+| `hooks/session-start.sh`, `hooks/session-start.ps1`, `hooks/session-start-context.md` | The `claude` and `codex` arms read `lucas-kit-models.md`, and the context tells each session to read `t3-tools.md` and the sheet. lucas-kit does not support GitHub Copilot: the `copilot` arm is carried only to keep merges cheap, and since it wraps the same context file it would print the T3 mandate | Low |
 | `VERSION`, `CHANGES.md` | Own version line (see open question 4) | One mechanical conflict per merge |
 | Generated preambles in about 15 SKILL.md files | Stamped by the generator | On a conflict, take upstream's version and regenerate |
 
@@ -98,9 +98,9 @@ This is one reference file in the shape of `codex-tools.md` and `pi-tools.md`. I
 
 setup-pstack saves the `orchestrator_capabilities` result to a temp file and runs the script before writing the sheet. `tests/t3-sheet.test.mjs` feeds it a trimmed real catalog and proves each rejection fires.
 
-**Identity.** The plugin is `t3-pstack@t3-pstack` and the sheet is `t3-pstack-models.md`, so t3-pstack never shares a plugin id, namespace, or sheet with pstack-claude. Skill bodies keep upstream's `pstack:<name>` text, and `t3-tools.md` reads it as `t3-pstack:<name>`.
+**Identity.** The plugin is `lucas-kit@lucas-kit` and the sheet is `lucas-kit-models.md`, so lucas-kit never shares a plugin id, namespace, or sheet with pstack-claude. Skill bodies keep upstream's `pstack:<name>` text, and `t3-tools.md` reads it as `lucas-kit:<name>`.
 
-**Location and sync.** The canonical file lives in your dotfiles repo. It is symlinked to `~/.claude/t3-pstack-models.md` and `~/.codex/t3-pstack-models.md`, the paths the hook and setup-pstack already use. So the hook script and the setup-pstack paths need no changes, and no include line is needed. Under T3, skills read the sheet before their first dispatch, the same on both hosts, so Codex needs no paste into `AGENTS.md`. setup-pstack writes through the symlink, resolving it with `realpath` first, so the link survives. After a dotfiles pull, re-run the check script on each machine (Mac, agents-fsn1, janus). Provider instances differ across these machines (section 7), so each machine gets its own sheet in dotfiles.
+**Location and sync.** The canonical file lives in your dotfiles repo. It is symlinked to `~/.claude/lucas-kit-models.md` and `~/.codex/lucas-kit-models.md`, the paths the hook and setup-pstack already use. So the hook script and the setup-pstack paths need no changes, and no include line is needed. Under T3, skills read the sheet before their first dispatch, the same on both hosts, so Codex needs no paste into `AGENTS.md`. setup-pstack writes through the symlink, resolving it with `realpath` first, so the link survives. After a dotfiles pull, re-run the check script on each machine (Mac, agents-fsn1, janus). Provider instances differ across these machines (section 7), so each machine gets its own sheet in dotfiles.
 
 **Shipped defaults** (`models.json` `t3` block, which renders into `t3-tools.md`):
 
@@ -132,7 +132,7 @@ Out of scope: pattern-buffer routines. No pstack skill defines one. Once this la
 ## 6. End-to-end proof
 
 1. `bun tools/generate.mjs --check` and `bun test tests/` pass. The check script's tests reject each malformed entry against a captured real catalog.
-2. Install from the local checkout into Claude Code and Codex: `/plugin marketplace add ~/Developer/t3-pstack`, then `codex plugin marketplace add ~/Developer/t3-pstack`. Uninstall `pstack@pstack-claude` first so the `pstack:*` names don't collide. This changes your global `~/.claude` and `~/.codex`, so I'll ask before doing it.
+2. Install from the local checkout into Claude Code and Codex: `/plugin marketplace add ~/Developer/lucas-kit`, then `codex plugin marketplace add ~/Developer/lucas-kit`. Uninstall `pstack@pstack-claude` first so the `pstack:*` names don't collide. This changes your global `~/.claude` and `~/.codex`, so I'll ask before doing it.
 3. In a fresh T3 Claude thread, run `/pstack:setup-pstack` and accept the cross-family panel. Check the written sheet and the check-script output.
 4. Run `/pstack:interrogate` on the overlay's own diff. Pass condition: three `taskId`s whose child threads (`t3_thread_list` with `includeSubagents`, then `t3_thread_read`) ran on `claudeAgent/claude-opus-5-5`, `codex/gpt-6.1-sol` and `grok/grok-4.7`, each with review text. The merged verdict must attribute findings per family.
 5. Run `/pstack:arena` on a small sketch task. Pass condition: three runners on three families, and a cross-judge from a family other than the parent's.
@@ -152,4 +152,4 @@ The questions as first asked:
 2. **One dispatch path, even for same-family work.** T3's guidance prefers native subagents for same-provider work. I route every pstack role through `delegate_task` anyway. That gives one set of semantics, one place to read options, and every child visible in T3. The cost is that Claude-on-Claude children are full T3 threads, not lightweight `Agent` calls.
 3. **Machines.** Do agents-fsn1 and janus use the same provider instance IDs as the Mac (`claudeAgent`, `codex`, `grok`)? If not, the synced sheet fails the check there. Then we either align the IDs in T3 settings or allow a per-host sheet.
 4. **Versioning.** The generator requires `MAJOR.MINOR.PATCH`. I propose an independent line starting at `1.0.0`. Each upstream merge keeps our VERSION and adds a CHANGES entry naming the merged pstack-claude version.
-5. **Terminal Claude Code on the same machine.** T3's Claude threads use `~/.claude`, the same as the terminal CLI. With no fallback, a terminal session gets t3-pstack, and its dispatches fail because the T3 tools are missing. Is that acceptable, or should T3's Claude provider run with its own `CLAUDE_CONFIG_DIR`?
+5. **Terminal Claude Code on the same machine.** T3's Claude threads use `~/.claude`, the same as the terminal CLI. With no fallback, a terminal session gets lucas-kit, and its dispatches fail because the T3 tools are missing. Is that acceptable, or should T3's Claude provider run with its own `CLAUDE_CONFIG_DIR`?

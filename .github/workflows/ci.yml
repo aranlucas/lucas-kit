@@ -29,6 +29,10 @@ jobs:
         run: bun tools/generate.mjs --check
       - name: Tool and invariant fixture tests
         run: bun test tests/
+      - name: Install vendored skills with pnpm
+        run: npm exec --yes --package=pnpm@12.11.0 -- bun test tests/pnpm-skills.test.mjs
+        env:
+          PSTACK_REQUIRE_PNPM_SKILLS: "1"
 
   windows-hooks:
     name: Windows session hooks

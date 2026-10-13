@@ -54,7 +54,7 @@ export const RUNTIMES = [
     hooks: (manifest) => [manifest.hooks],
     pluginRootVar: "COPILOT_PLUGIN_ROOT",
   },
-  // T3 is not a build: t3-pstack ships in the Claude Code and Codex manifests
+  // T3 is not a build: lucas-kit ships in the Claude Code and Codex manifests
   // and dispatches through the t3-code MCP tools on either host, so its row has
   // no manifest. Its preamble replaces the Codex one, because t3-tools.md
   // sends a Codex host on to codex-tools.md for everything but dispatch.
