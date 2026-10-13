@@ -2,6 +2,12 @@
 
 This file is the release changelog, with one `## <version> - <title>` entry per release, newest first. The Cursor-to-Claude rewrite rules live in [`tools/substitutions.json`](tools/substitutions.json), and the [sync boundary](CONTRIBUTING.md#the-sync-boundary) in `CONTRIBUTING.md` defines how a change to upstream's skill content is declared.
 
+## 1.0.14 - Scoped skills package and pnpm tooling
+
+- The skills package is `@aranlucas/kit-skills`. Its archive is ready for public npm publication and includes the consumer README. pnpm packing explicitly preserves executable script resources.
+- The README documents registry installation, skill approval, directory configuration, updates, and removal. The vendoring guide documents the scoped tarball and its source-specific permission key.
+- pnpm 12.11.0 manages source dependencies, packaging, and CI commands through `pnpm-lock.yaml`. Bun remains the existing generator and test runtime, and the upstream-owned script tooling retains its own Bun lockfile. The security job scans every pnpm lockfile document so project dependencies remain covered.
+
 ## 1.0.13 - Lucas Kit and pnpm vendoring
 
 Lucas Kit is Lucas's fork of Christian Bager Bach Houmann's t3-pstack. The plugin and marketplace are `lucas-kit`, the model sheet is `lucas-kit-models.md`, and the skills-only package is `lucas-kit-skills`. Existing model settings can be copied from `t3-pstack-models.md` to the new sheet name. The source directory stays `plugins/pstack` to keep upstream merges small.

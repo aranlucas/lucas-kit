@@ -32,7 +32,7 @@ The parent keeps each `taskId`. The children's completions wake it. It merges th
 
 ## 2. Fork strategy
 
-**Chosen: track pstack-claude as upstream and keep the T3 overlay mostly in new files.** Syncing is `git fetch upstream && git merge upstream/main && bun tools/generate.mjs && bun test tests/`. pstack-claude keeps running `tools/sync.mjs` against cursor/plugins. We never run it, so `forks.json` and `upstream.json` stay upstream-owned and untouched.
+**Chosen: track pstack-claude as upstream and keep the T3 overlay mostly in new files.** Syncing is `git fetch upstream && git merge upstream/main && pnpm generate && pnpm test tests/`. pstack-claude keeps running `tools/sync.mjs` against cursor/plugins. We never run it, so `forks.json` and `upstream.json` stay upstream-owned and untouched.
 
 The overlay adds a T3 row to the port's existing `RUNTIMES` table, next to Codex and Pi. That one row brings three things the generator already does for other runtimes:
 
@@ -131,7 +131,7 @@ Out of scope: pattern-buffer routines. No pstack skill defines one. Once this la
 
 ## 6. End-to-end proof
 
-1. `bun tools/generate.mjs --check` and `bun test tests/` pass. The check script's tests reject each malformed entry against a captured real catalog.
+1. `pnpm generate:check` and `pnpm test tests/` pass. The check script's tests reject each malformed entry against a captured real catalog.
 2. Install from the local checkout into Claude Code and Codex: `/plugin marketplace add ~/Developer/lucas-kit`, then `codex plugin marketplace add ~/Developer/lucas-kit`. Uninstall `pstack@pstack-claude` first so the `pstack:*` names don't collide. This changes your global `~/.claude` and `~/.codex`, so I'll ask before doing it.
 3. In a fresh T3 Claude thread, run `/pstack:setup-pstack` and accept the cross-family panel. Check the written sheet and the check-script output.
 4. Run `/pstack:interrogate` on the overlay's own diff. Pass condition: three `taskId`s whose child threads (`t3_thread_list` with `includeSubagents`, then `t3_thread_read`) ran on `claudeAgent/claude-opus-5-5`, `codex/gpt-6.1-sol` and `grok/grok-4.7`, each with review text. The merged verdict must attribute findings per family.

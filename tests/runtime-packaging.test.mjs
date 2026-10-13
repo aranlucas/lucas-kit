@@ -67,7 +67,7 @@ describe("manifests", () => {
     expect(shared(codex)).toEqual(shared(claude));
     expect(claudeMarketplace.owner).toEqual(claude.author);
     expect(claudeMarketplace.plugins.map(({ name, source }) => [name, source])).toEqual([[claude.name, "./plugins/pstack"]]);
-    expect(shared(piPackage)).toEqual({ ...shared(claude), keywords: ["pi-package", ...claude.keywords] });
+    expect(shared(piPackage)).toEqual({ ...shared(claude), name: "@aranlucas/kit-skills", keywords: ["pi-package", ...claude.keywords] });
     expect(piPackage.version).toBe(claude.version);
     expect({ ...shared(copilot), keywords: claude.keywords }).toEqual(shared(claude));
     expect(copilot.version).toBe(claude.version);

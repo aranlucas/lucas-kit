@@ -7,7 +7,7 @@ import { join } from "node:path";
 const workflow = Bun.YAML.parse(readFileSync(new URL("../.github/workflows/ci.yml", import.meta.url), "utf8"));
 const step = workflow.jobs.forks.steps.find(({ name }) => name === "Check every fork from upstream is declared");
 
-// GitHub runs a step body as `bash -e <file>`. The bun on the path is a stub
+// GitHub runs a step body as `bash -e <file>`. The pnpm on the path is a stub
 // that records each sync it is asked for and fails for one component.
 function runStep(upstream, failing = "") {
   const dir = mkdtempSync(join(tmpdir(), "pstack-forks-step-"));
@@ -18,7 +18,7 @@ function runStep(upstream, failing = "") {
     if (upstream !== null) writeFileSync(join(dir, "tools/upstream.json"), upstream);
     writeFileSync(calls, "");
     writeFileSync(join(dir, "step.sh"), step.run);
-    writeFileSync(join(dir, "bin/bun"), '#!/bin/bash\necho "$2 $3" >> "$CALLS"\n[ "$2" != "$FAILING" ]\n', { mode: 0o755 });
+    writeFileSync(join(dir, "bin/pnpm"), '#!/bin/bash\necho "$3 $4" >> "$CALLS"\n[ "$3" != "$FAILING" ]\n', { mode: 0o755 });
     const { status, stdout } = spawnSync("bash", ["-e", "step.sh"], {
       cwd: dir,
       env: { PATH: `${join(dir, "bin")}:${process.env.PATH}`, RUNNER_TEMP: dir, CALLS: calls, FAILING: failing },
