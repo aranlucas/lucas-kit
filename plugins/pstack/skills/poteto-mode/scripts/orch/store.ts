@@ -1169,6 +1169,15 @@ function parseGtBranches(raw: string): readonly string[] {
   return branches.slice(1);
 }
 
+function stripGraphiteControlCharacters(raw: string): string {
+  // Node's stripVTControlCharacters does not recognize SGR parameters that
+  // use colons (for example, `\x1b[38:5:2m`), which Graphite emits for color.
+  const normalized = raw
+    .replace(/\u001B\[[0-?]*[ -/]*[@-~]/g, "")
+    .replace(/\u001B\][^\u0007\u001B]*(?:\u0007|\u001B\\)/g, "");
+  return stripVTControlCharacters(normalized);
+}
+
 function graphitePullRequest({
   branch,
   gt,
@@ -1184,7 +1193,7 @@ function graphitePullRequest({
   try {
     // A colour setting such as FORCE_COLOR in the user's environment must not
     // break the gt parsers.
-    raw = stripVTControlCharacters(
+    raw = stripGraphiteControlCharacters(
       execFileSync(gt, ["--no-interactive", "info", branch], {
         cwd: repo,
         encoding: "utf8",
@@ -1229,7 +1238,7 @@ function graphiteFrontier({
 }): readonly GtFrontierEntry[] {
   let raw: string;
   try {
-    raw = stripVTControlCharacters(
+    raw = stripGraphiteControlCharacters(
       execFileSync(
         gt,
         ["--no-interactive", "log", "short", "--stack", "--reverse"],
