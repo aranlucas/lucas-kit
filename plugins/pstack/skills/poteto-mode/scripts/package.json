@@ -4,7 +4,11 @@
   "type": "module",
   "scripts": {
     "test": "bun test orch watch-pr check-plan.test.ts",
-    "typecheck": "tsc --project tsconfig.json"
+    "typecheck": "tsc --project tsconfig.json",
+    "lint": "oxlint --type-aware",
+    "lint:fix": "oxlint --type-aware --fix",
+    "format": "oxfmt --write",
+    "format:check": "oxfmt --check"
   },
   "dependencies": {
     "commander": "14.0.0"
