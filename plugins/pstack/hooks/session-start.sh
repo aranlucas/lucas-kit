@@ -5,11 +5,11 @@ set -eu
 # Literal plugin paths, so a static reader of the hooks files can follow them.
 case "${1:-}" in
   claude)
-    sheet="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/t3-pstack-models.md"
+    sheet="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/lucas-kit-models.md"
     reader="${CLAUDE_PLUGIN_ROOT}/skills/setup-pstack/scripts/read-sheet.sh"
     ;;
   codex)
-    sheet="${CODEX_HOME:-$HOME/.codex}/t3-pstack-models.md"
+    sheet="${CODEX_HOME:-$HOME/.codex}/lucas-kit-models.md"
     reader="${CLAUDE_PLUGIN_ROOT}/skills/setup-pstack/scripts/read-sheet.sh"
     ;;
   copilot)

@@ -52,6 +52,14 @@ describe("manifests", () => {
   const piPackage = json("package.json");
   const copilot = json("plugins/pstack/.github/plugin/plugin.json");
 
+  test("the Lucas fork has its own identity and maintainer", () => {
+    expect(claude.name).toBe("lucas-kit");
+    expect(claude.author).toEqual({ name: "Lucas", url: "https://github.com/aranlucas" });
+    expect(codex.interface.displayName).toBe("lucas-kit");
+    expect(claudeMarketplace.name).toBe("lucas-kit");
+    expect(codexMarketplace.name).toBe("lucas-kit");
+  });
+
   test("the plugin and marketplace manifests agree on every fact they repeat", () => {
     const shared = ({ name, author, homepage, repository, license, keywords }) =>
       ({ name, author, homepage, repository, license, keywords });

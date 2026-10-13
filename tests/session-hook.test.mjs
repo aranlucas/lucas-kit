@@ -58,8 +58,8 @@ function runHook(runtime, sheet, command = sessionStart[runtimes[runtime].hooks]
   const sheetRoot = join(home, sheetDir);
   if (sheet !== null) {
     mkdirSync(sheetRoot);
-    // t3-pstack's Claude Code and Codex sheet is t3-pstack-models.md. Copilot keeps upstream's name.
-    writeSheet(join(sheetRoot, runtimes[runtime].hooks === "copilot" ? "pstack-models.md" : "t3-pstack-models.md"), sheet);
+    // lucas-kit's Claude Code and Codex sheet is lucas-kit-models.md. Copilot keeps upstream's name.
+    writeSheet(join(sheetRoot, runtimes[runtime].hooks === "copilot" ? "pstack-models.md" : "lucas-kit-models.md"), sheet);
   }
   try {
     const r = spawnSync("sh", ["-c", command], {
@@ -83,7 +83,8 @@ describe("SessionStart hook", () => {
   });
 
   test("names only skills that exist", () => {
-    const named = [...mandate.matchAll(/(?:pstack:|`\/)([a-z0-9-]+)/g)].map((m) => m[1]);
+    const skillReference = new RegExp("(?:" + codexManifest.name + ":|`/)([a-z0-9-]+)", "g");
+    const named = [...mandate.matchAll(skillReference)].map((m) => m[1]);
     const skills = new Set(agentSkills(join(pluginRoot, "skills")).map(({ name }) => name));
     expect(named).toContain("poteto-mode");
     expect(named.filter((name) => !skills.has(name))).toEqual([]);

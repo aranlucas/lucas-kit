@@ -17,6 +17,9 @@ plugins/pstack/skills/poteto-mode/scripts/node_modules/
 # bun installs the typebox peer for the Pi extension tests
 /node_modules/
 
+# Generated skills-only tarballs for pnpm consumers
+/dist/
+
 # Worktrees created for isolated agent work
 .claude/worktrees/
 

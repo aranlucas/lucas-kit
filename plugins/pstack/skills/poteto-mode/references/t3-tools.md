@@ -1,6 +1,6 @@
 # T3 tool mapping for pstack
 
-t3-pstack runs inside T3 Code, on a Claude Code or a Codex thread. Every subagent, panel, fan-out, schedule, and PR watch goes through the `t3-code` MCP tools, so a panel can mix Claude, GPT, and Grok children. Read this before following a skill that dispatches work, names a model, schedules, watches a PR, or proves UI behavior.
+lucas-kit runs inside T3 Code, on a Claude Code or a Codex thread. Every subagent, panel, fan-out, schedule, and PR watch goes through the `t3-code` MCP tools, so a panel can mix Claude, GPT, and Grok children. Read this before following a skill that dispatches work, names a model, schedules, watches a PR, or proves UI behavior.
 
 ## Precedence
 
@@ -8,7 +8,7 @@ This file wins for dispatch, models, schedules, pull requests, transcripts, and 
 
 Hosts prefix MCP tool names, as in `mcp__t3-code__delegate_task` or `mcp__t3_code__delegate_task`. This file uses the bare names.
 
-This plugin is `t3-pstack`, so its skills and agents register as `t3-pstack:<name>`. The skills keep upstream's `pstack:<name>` spelling. Read every `pstack:<name>` in them as `t3-pstack:<name>`, and never invoke a `pstack:` skill or agent, because that namespace belongs to the separate pstack-claude plugin.
+This plugin is `lucas-kit`, so its skills and agents register as `lucas-kit:<name>`. The skills keep upstream's `pstack:<name>` spelling. Read every `pstack:<name>` in them as `lucas-kit:<name>`, and never invoke a `pstack:` skill or agent, because that namespace belongs to the separate pstack-claude plugin.
 
 ## Tool actions
 
@@ -48,7 +48,7 @@ poteto-mode's [Subagents](../SKILL.md#subagents) section applies through `delega
 
 ## The sheet
 
-The override sheet is `t3-pstack-models.md` in the host's config directory, which is `$CLAUDE_CONFIG_DIR` or `~/.claude` on Claude Code, `$CODEX_HOME` or `~/.codex` on Codex. Its name differs from pstack-claude's `pstack-models.md`, so the two plugins never read each other's sheet, and every `pstack-models.md` path in setup-pstack means this file. Read it before the first dispatch in a session, on either host. It needs no include line and no paste into `AGENTS.md`.
+The override sheet is `lucas-kit-models.md` in the host's config directory, which is `$CLAUDE_CONFIG_DIR` or `~/.claude` on Claude Code, `$CODEX_HOME` or `~/.codex` on Codex. Its name differs from pstack-claude's `pstack-models.md`, so the two plugins never read each other's sheet, and every `pstack-models.md` path in setup-pstack means this file. Read it before the first dispatch in a session, on either host. It needs no include line and no paste into `AGENTS.md`.
 
 Each role line holds one entry. A panel role (`arena runners`, `arena cross-judge pool`, `architect runners`, `interrogate reviewers`) holds a comma-separated list. An entry is `<providerInstanceId>/<modelId>` followed by any `<optionId>=<value>` pairs, or `inherit-parent` (alias `auto`). It maps one to one onto `delegate_task`'s `target`. The provider instance becomes `providerInstanceId`, the model becomes `model`, and the pairs become `options`. `inherit-parent` omits `target`. It does not count toward a panel's two families, because one sheet serves every thread on the machine. Option IDs differ per provider (Claude names the reasoning option `effort`, Codex and Grok name it `reasoningEffort`), so copy them from `orchestrator_capabilities`, never from another provider's line.
 
@@ -146,6 +146,6 @@ Every skill below carries a pointer to this file under its heading. Read its row
 | `thermo-nuclear-review` | It dispatches nothing. Its PR-discussion check finds the branch's PR with `gh pr view`. |
 | `no-comments` | `pstack:comment-sicko` is a `delegate_task` whose brief reads its agent file first (Subagent policy). Pass it the scope, and do not give it a worktree, because a worktree lacks the scope's uncommitted changes. |
 | `create-verification-skill` | For a web app the generated skill drives through the `preview_*` tools, and for a simulator through the `device_*` tools (see [UI evidence](#ui-evidence)). Every other surface keeps its own harness. |
-| `maintain-verification-skill` | Per-feature source readers are `delegate_task` calls. The live pass drives through the project's verify skill or [UI evidence](#ui-evidence). To run it on a schedule, `schedule_task` with `{type: "fixed_time", timeOfDay, weekdays}`, the repo's `projectId`, `bindToCurrentThread: false`, and a prompt that runs `/t3-pstack:maintain-verification-skill`. Prove it once with `run_scheduled_task_now`. |
+| `maintain-verification-skill` | Per-feature source readers are `delegate_task` calls. The live pass drives through the project's verify skill or [UI evidence](#ui-evidence). To run it on a schedule, `schedule_task` with `{type: "fixed_time", timeOfDay, weekdays}`, the repo's `projectId`, `bindToCurrentThread: false`, and a prompt that runs `/lucas-kit:maintain-verification-skill`. Prove it once with `run_scheduled_task_now`. |
 | `babysit` | On T3 this skill's own polling (`gh pr checks --watch`, the `loop` skill) is replaced entirely by the Babysit mapping in [Playbooks](#playbooks). The watcher (the bare `watch-pr`) gives every verdict and loops inside the turn in place of playbook step 6's `/loop` and polling. The watch (`watch_pull_request`) only waits for a human review. Per mode, see [Playbooks](#playbooks). |
-| `poteto-help` | The user types it as `/t3-pstack:poteto-help`. Every slash command it hands the user is `/t3-pstack:<name>`, whatever the linked reference spells. Its model and routing check and its missing-sheet question read the T3 sheet, `t3-pstack-models.md` (see [The sheet](#the-sheet)), not the `pstack-models.md` that setup-pstack's Other runtimes table names, and the question offers a model per role without a default effort, because a T3 sheet sets effort in each entry. Setup is `/t3-pstack:setup-pstack`. Install commands come from t3-pstack's README (`chhoumann/t3-pstack`), not pstack-claude's, and public copies link under `https://github.com/chhoumann/t3-pstack/blob/main/plugins/pstack/`. |
+| `poteto-help` | The user types it as `/lucas-kit:poteto-help`. Every slash command it hands the user is `/lucas-kit:<name>`, whatever the linked reference spells. Its model and routing check and its missing-sheet question read the T3 sheet, `lucas-kit-models.md` (see [The sheet](#the-sheet)), not the `pstack-models.md` that setup-pstack's Other runtimes table names, and the question offers a model per role without a default effort, because a T3 sheet sets effort in each entry. Setup is `/lucas-kit:setup-pstack`. Install from `aranlucas/lucas-kit` using its README or vendored pnpm archive. Public copies link under `https://github.com/aranlucas/lucas-kit/blob/main/plugins/pstack/`. Read the installed skills locally when discussing Lucas Kit's behavior. |

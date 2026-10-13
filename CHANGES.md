@@ -2,6 +2,14 @@
 
 This file is the release changelog, with one `## <version> - <title>` entry per release, newest first. The Cursor-to-Claude rewrite rules live in [`tools/substitutions.json`](tools/substitutions.json), and the [sync boundary](CONTRIBUTING.md#the-sync-boundary) in `CONTRIBUTING.md` defines how a change to upstream's skill content is declared.
 
+## 1.0.13 - Lucas Kit and pnpm vendoring
+
+Lucas Kit is Lucas's fork of Christian Bager Bach Houmann's t3-pstack. The plugin and marketplace are `lucas-kit`, the model sheet is `lucas-kit-models.md`, and the skills-only package is `lucas-kit-skills`. Existing model settings can be copied from `t3-pstack-models.md` to the new sheet name. The source directory stays `plugins/pstack` to keep upstream merges small.
+
+- `npm run pack:skills` creates a private skills-only tarball with the root layout pnpm 12.11.0 discovers. Consumers can commit it under `vendor/`, approve its skills, and restore the agent links through their lockfile.
+- The packaging tests compare every resource and executable bit, and the pinned pnpm integration checks approval, sibling paths, frozen offline reinstall, and revocation.
+- Lucas is the current maintainer. Upstream copyright and provenance notices are retained; the repository metadata points to `aranlucas/lucas-kit`.
+
 ## 1.0.12 - merge pstack-claude 0.9.83
 
 t3-pstack 1.0.12 merges pstack-claude 0.9.83 (upstream commit `058a348`), which syncs that port to Lauren Tan's pstack v0.15.21 (cursor/plugins `997ffc7`) and carries her thermos plugin (`118e73b`, thermos 1.0.0). t3-pstack ported v0.15.16 through v0.15.20 itself in 1.0.11, so where the two ports differ, the merge keeps the text `tools/sync.mjs` derives from Lauren's, plus the declared forks. `bun tools/sync.mjs pstack 997ffc7 --dry-run` reports no undeclared fork, and no skill's forked-line count grew. The 0.9.83 entry below describes what came in. Model defaults are unchanged, and so is the `t3` block in `models.json`.
