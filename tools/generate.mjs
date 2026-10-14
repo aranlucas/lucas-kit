@@ -63,6 +63,7 @@ import { Type } from "typebox";
 import { Value } from "typebox/value";
 
 import { code, codeList, PLUGIN, SKILLS } from "./plugin.mjs";
+import { isModelPolicy } from "./model-policy.mjs";
 import { RUNTIMES, roleSkills } from "./runtimes.mjs";
 import { markdownFiles, pathIsInside, validateProsePaths, validateSkillsTree, walk } from "./validate-skills.mjs";
 
@@ -538,6 +539,10 @@ export function applyRegions(file, text, models, { strict = true } = {}) {
 // A role's "models" names a tier (default, strongest, panel) or lists slugs.
 // A tier resolves to its models and stays on the role as `tier`, so moving a
 // tier is one edit and the Codex mapping can follow the same keys.
+/**
+ * @param {import("./model-policy.mjs").ModelPolicy} models
+ * @returns {import("./model-policy.mjs").ResolvedModels}
+ */
 export function resolveModels(models) {
   return {
     ...models,
@@ -554,6 +559,7 @@ const TIERS = ["default", "strongest", "panel"];
 // role, tier, or slug named. `skillExists(skill)` reports whether a role's
 // skill directory carries a SKILL.md.
 export function parseModels(raw, skillExists) {
+  /** @param {string} message @returns {never} */
   const fail = (message) => {
     throw new Error(`models.json: ${message}`);
   };
@@ -565,6 +571,7 @@ export function parseModels(raw, skillExists) {
     }
   };
   const isObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+  if (!isObject(raw)) fail("must be an object");
   for (const key of ["available", "efforts", "roles"]) if (!Array.isArray(raw[key])) fail(`"${key}" must be a list`);
   for (const key of ["tiers", ...RUNTIMES.filter((runtime) => runtime.key).map((runtime) => runtime.key)]) {
     if (!isObject(raw[key])) fail(`"${key}" must be an object`);
@@ -573,6 +580,9 @@ export function parseModels(raw, skillExists) {
   unique(raw.available, "available");
   for (const tier of TIERS) {
     if (!Object.hasOwn(raw.tiers, tier)) fail(`tiers has no "${tier}", which a stamped region renders from`);
+  }
+  for (const [index, slug] of raw.available.entries()) {
+    if (typeof slug !== "string") fail(`available[${index}] must be a string`);
   }
   const tierLists = new Map();
   for (const [tier, value] of Object.entries(raw.tiers)) {
@@ -584,9 +594,12 @@ export function parseModels(raw, skillExists) {
     tierLists.set(slugs.join(), tier);
   }
   const labels = new Set();
-  for (const role of raw.roles) {
+  for (const [index, role] of raw.roles.entries()) {
+    if (!isObject(role)) fail(`roles[${index}] must be an object`);
+    if (typeof role.role !== "string") fail(`roles[${index}].role must be a string`);
     if (labels.has(role.role)) fail(`role "${role.role}" appears twice`);
     labels.add(role.role);
+    if (typeof role.skill !== "string") fail(`roles[${index}].skill must be a string`);
     if (!skillExists(role.skill)) fail(`role "${role.role}" names skill "${role.skill}", which has no SKILL.md`);
     if (typeof role.models === "string") {
       if (!Object.hasOwn(raw.tiers, role.models)) {
@@ -611,6 +624,7 @@ export function parseModels(raw, skillExists) {
     fail(`defaultEffort "${raw.defaultEffort}" is not an effort level or "session"`);
   }
   for (const runtime of RUNTIMES) runtime.checkModels?.(raw[runtime.key], { raw, fail, unique, isObject });
+  if (!isModelPolicy(raw)) fail("has invalid field types");
   return resolveModels(raw);
 }
 

@@ -84,7 +84,11 @@ function checkCodexModels(codex, { raw, fail, unique }) {
   }
   for (const [tier, value] of Object.entries(codex)) {
     if (!Object.hasOwn(raw.tiers, tier)) fail(`codex names "${tier}", which is not a tier`);
-    unique([value].flat(), `codex "${tier}"`);
+    const models = [value].flat();
+    unique(models, `codex "${tier}"`);
+    for (const model of models) {
+      if (typeof model !== "string") fail(`codex "${tier}" must name a model or list of models`);
+    }
   }
 }
 
@@ -97,6 +101,7 @@ function checkPiModels(pi, { raw, fail, isObject }) {
   }
   if (!isObject(pi.models)) fail('pi needs a "models" object');
   if (!Object.hasOwn(pi.models, pi.fallback)) fail(`pi.fallback "${pi.fallback}" is not a provider in pi.models`);
+  if (typeof pi.fallback !== "string") fail("pi.fallback must be a string");
   for (const [provider, table] of Object.entries(pi.models)) {
     const at = `pi.models.${provider}`;
     if (!isObject(table)) fail(`${at} must be an object`);

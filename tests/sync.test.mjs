@@ -1517,7 +1517,7 @@ describe("sync CLI", () => {
     const newSha = commit(newText);
 
     const port = join(root, "port");
-    for (const file of ["sync.mjs", "generate.mjs", "plugin.mjs", "runtimes.mjs", "validate-skills.mjs", "substitutions.json"]) {
+    for (const file of ["sync.mjs", "generate.mjs", "model-policy.mjs", "plugin.mjs", "runtimes.mjs", "validate-skills.mjs", "substitutions.json"]) {
       cpSync(join(import.meta.dirname, "../tools", file), join(port, "tools", file));
     }
     symlinkSync(join(import.meta.dirname, "../node_modules"), join(port, "node_modules"));
