@@ -89,12 +89,17 @@ export function parseRule(rule, i) {
   if (unknown.length) fail(`unknown field ${unknown.map((f) => `"${f}"`).join(", ")}`);
   const { pattern, regex, files, replacement, rationale } = rule;
   const source = pattern ?? regex;
-  if ((pattern == null) === (regex == null) || typeof source !== "string" || !source) {
+  if (
+    (pattern === null || pattern === undefined) === (regex === null || regex === undefined) ||
+    typeof source !== "string" ||
+    !source
+  ) {
     fail("needs exactly one of a non-empty pattern or regex");
   }
   if (typeof replacement !== "string") fail("needs a replacement string");
   if (typeof rationale !== "string" || !rationale) fail("needs a rationale");
-  if (files != null && typeof files !== "string") fail("files must be a regex source string");
+  if (files !== null && files !== undefined && typeof files !== "string")
+    fail("files must be a regex source string");
   return {
     key: pattern ?? (files ? `${regex} in ${files}` : regex),
     match: pattern ?? new RegExp(regex, "g"),
@@ -145,7 +150,7 @@ export function parseForks(registry, components) {
           fail("must be an object");
         const unknown = Object.keys(entry).filter((field) => !FORK_FIELDS.includes(field));
         if (unknown.length) fail(`unknown field ${unknown.map((f) => `"${f}"`).join(", ")}`);
-        const missing = FORK_FIELDS.filter((field) => entry[field] == null);
+        const missing = FORK_FIELDS.filter((field) => (entry[field] ?? null) === null);
         if (missing.length) fail(`missing field ${missing.map((f) => `"${f}"`).join(", ")}`);
         if (!FORK_KINDS.has(entry.kind))
           fail(`unknown kind "${entry.kind}"; use port-feature or policy`);
