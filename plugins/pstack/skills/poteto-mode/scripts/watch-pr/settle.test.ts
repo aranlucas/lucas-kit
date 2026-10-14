@@ -333,7 +333,7 @@ function graphql(pr: {
   readonly threads?: readonly unknown[];
   readonly reactions?: readonly unknown[];
   readonly readyAt?: string;
-}): unknown {
+}) {
   return {
     data: {
       viewer: { login: "viewer" },

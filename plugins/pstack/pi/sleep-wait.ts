@@ -14,7 +14,7 @@
 // `timeout 5 sleep 30`. tests/pi/sleep-wait.test.mjs lists each, so changing
 // one is a visible decision.
 const MIN_WAIT_S = 2;
-const SLEEP_UNITS: Record<string, number> = { "": 1, s: 1, m: 60, h: 3600, d: 86400 };
+const SLEEP_UNITS = { "": 1, s: 1, m: 60, h: 3600, d: 86400 };
 
 // Seconds a literal sleep argument asks for (30, 2.5, 1m, 1m30s, infinity);
 // 0 when it is not a literal.
@@ -24,7 +24,12 @@ function sleepSeconds(arg: string): number {
   if (!parts || parts.join("") !== arg) return 0;
   return parts.reduce((sum, part) => {
     const unit = /[smhd]$/.exec(part)?.[0] ?? "";
-    return sum + Number(part.slice(0, part.length - unit.length)) * SLEEP_UNITS[unit];
+    // SAFETY: the suffix is [smhd] or empty, exactly the keys of SLEEP_UNITS.
+    return (
+      sum +
+      Number(part.slice(0, part.length - unit.length)) *
+        SLEEP_UNITS[unit as keyof typeof SLEEP_UNITS]
+    );
   }, 0);
 }
 

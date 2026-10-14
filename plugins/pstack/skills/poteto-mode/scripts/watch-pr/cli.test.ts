@@ -8,30 +8,23 @@ import { parsePrNumber } from "./types.ts";
 
 const silentIo = { stdout: () => {}, stderr: () => {} };
 
-function testRuntime(reader: GitHubReader): {
-  readonly runtime: CliRuntime;
-  readonly stdout: string[];
-  readonly stderr: string[];
-} {
+function testRuntime(reader: GitHubReader) {
   const stdout: string[] = [];
   const stderr: string[] = [];
-  return {
-    stdout,
-    stderr,
-    runtime: {
-      reader,
-      deadline: new WatchDeadline(0, () => 0),
-      clock: {
-        now: () => 0,
-        observedAt: () => "2026-07-26T00:00:00.000Z",
-        async sleep() {
-          throw new Error("test unexpectedly slept");
-        },
+  const runtime: CliRuntime = {
+    reader,
+    deadline: new WatchDeadline(0, () => 0),
+    clock: {
+      now: () => 0,
+      observedAt: () => "2026-07-26T00:00:00.000Z",
+      async sleep() {
+        throw new Error("test unexpectedly slept");
       },
-      stdout: (value) => stdout.push(value),
-      stderr: (value) => stderr.push(value),
     },
+    stdout: (value) => stdout.push(value),
+    stderr: (value) => stderr.push(value),
   };
+  return { stdout, stderr, runtime } as const;
 }
 
 describe("parseArgs", () => {

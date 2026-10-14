@@ -10,11 +10,19 @@ const MAX_LOOP_S = 24 * 86400;
 const IDLE_RETRY_MS = 1000;
 
 const wakeupParams = Type.Object({
-  delaySeconds: Type.Optional(Type.Number({ description: `Seconds until the wakeup (${MIN_DELAY_S}-${MAX_DELAY_S})` })),
+  delaySeconds: Type.Optional(
+    Type.Number({ description: `Seconds until the wakeup (${MIN_DELAY_S}-${MAX_DELAY_S})` }),
+  ),
   prompt: Type.Optional(Type.String({ description: "The prompt to run when the wakeup fires" })),
   reason: Type.Optional(Type.String({ description: "Why this delay, in one short sentence" })),
-  noop: Type.Optional(Type.Boolean({ description: "Mark this wakeup as a routine check; it is scheduled all the same" })),
-  stop: Type.Optional(Type.Boolean({ description: "Cancel the pending wakeup; no other field is needed" })),
+  noop: Type.Optional(
+    Type.Boolean({
+      description: "Mark this wakeup as a routine check; it is scheduled all the same",
+    }),
+  ),
+  stop: Type.Optional(
+    Type.Boolean({ description: "Cancel the pending wakeup; no other field is needed" }),
+  ),
 });
 
 // One pending wakeup, one fixed-interval loop, and one live self-paced loop per
@@ -96,7 +104,7 @@ function clampDelay(seconds: number): number {
   return Math.min(MAX_DELAY_S, Math.max(MIN_DELAY_S, Math.round(seconds)));
 }
 
-const UNIT_SECONDS: Record<string, number> = { s: 1, m: 60, h: 3600, d: 86400 };
+const UNIT_SECONDS = { s: 1, m: 60, h: 3600, d: 86400 };
 
 type LoopCommand =
   | { kind: "stop" }
@@ -110,9 +118,11 @@ function parseLoop(args: string): LoopCommand {
   if (text === "stop") return { kind: "stop" };
   const m = /^(\d+)([smhd])(?:\s+([\s\S]+))?$/.exec(text);
   if (m) {
-    const seconds = Number(m[1]) * UNIT_SECONDS[m[2]];
+    // SAFETY: capture 2 is [smhd], exactly the keys of UNIT_SECONDS.
+    const seconds = Number(m[1]) * UNIT_SECONDS[m[2] as keyof typeof UNIT_SECONDS];
     if (!m[3]) return { kind: "usage" };
-    if (seconds > MAX_LOOP_S) return { kind: "usage", reason: "Intervals over 24 days are not supported." };
+    if (seconds > MAX_LOOP_S)
+      return { kind: "usage", reason: "Intervals over 24 days are not supported." };
     return { kind: "fixed", seconds, prompt: m[3].trim() };
   }
   return { kind: "dynamic", prompt: text };
@@ -146,21 +156,37 @@ export function registerSchedule(pi: ExtensionAPI, scheduler: Scheduler, oneShot
         throw new Error("schedule_wakeup needs delaySeconds and prompt unless stop is true.");
       }
       if (scheduler.sealed) {
-        ctx.ui.notify("A wakeup this run asked for was not scheduled: /loop ended or replaced the loop while it ran.", "warning");
+        ctx.ui.notify(
+          "A wakeup this run asked for was not scheduled: /loop ended or replaced the loop while it ran.",
+          "warning",
+        );
         return {
-          content: [{ type: "text", text: "Not scheduled: the user ended or replaced the loop with a /loop command during this run. Do not schedule another wakeup in this run." }],
+          content: [
+            {
+              type: "text",
+              text: "Not scheduled: the user ended or replaced the loop with a /loop command during this run. Do not schedule another wakeup in this run.",
+            },
+          ],
           details: { refused: true },
         };
       }
       if (oneShot.exits(ctx)) {
-        throw new Error(`schedule_wakeup cannot fire in a ${ctx.mode} run: pi exits when this run ends. Finish the work in this run instead.`);
+        throw new Error(
+          `schedule_wakeup cannot fire in a ${ctx.mode} run: pi exits when this run ends. Finish the work in this run instead.`,
+        );
       }
       const seconds = clampDelay(params.delaySeconds);
       scheduler.scheduleWakeup(seconds, params.prompt, ctx);
       const fireAt = new Date(Date.now() + seconds * 1000).toISOString();
-      const clamped = seconds !== params.delaySeconds ? ` (clamped from ${params.delaySeconds})` : "";
+      const clamped =
+        seconds !== params.delaySeconds ? ` (clamped from ${params.delaySeconds})` : "";
       return {
-        content: [{ type: "text", text: `Wakeup scheduled in ${seconds}s${clamped}, at ${fireAt}. It replaces any earlier pending wakeup.` }],
+        content: [
+          {
+            type: "text",
+            text: `Wakeup scheduled in ${seconds}s${clamped}, at ${fireAt}. It replaces any earlier pending wakeup.`,
+          },
+        ],
         details: { delaySeconds: seconds, fireAt, noop: params.noop === true },
       };
     },
@@ -175,7 +201,8 @@ export function registerSchedule(pi: ExtensionAPI, scheduler: Scheduler, oneShot
   });
 
   pi.registerCommand("loop", {
-    description: "Run a prompt on an interval (/loop 5m <prompt>), self-paced (/loop <prompt>), or stop (/loop stop)",
+    description:
+      "Run a prompt on an interval (/loop 5m <prompt>), self-paced (/loop <prompt>), or stop (/loop stop)",
     async handler(args, ctx) {
       const cmd = parseLoop(args);
       // Also true during a manual compaction, which no run is behind: the first
@@ -203,10 +230,16 @@ export function registerSchedule(pi: ExtensionAPI, scheduler: Scheduler, oneShot
       };
       switch (cmd.kind) {
         case "usage":
-          ctx.ui.notify(`${cmd.reason ? `${cmd.reason} ` : ""}Usage: /loop [interval like 5m or 1h] <prompt>, or /loop stop`, "info");
+          ctx.ui.notify(
+            `${cmd.reason ? `${cmd.reason} ` : ""}Usage: /loop [interval like 5m or 1h] <prompt>, or /loop stop`,
+            "info",
+          );
           return;
         case "stop":
-          ctx.ui.notify(scheduler.stopAll(scheduler.running) ? "Loop stopped." : "No loop was running.", "info");
+          ctx.ui.notify(
+            scheduler.stopAll(scheduler.running) ? "Loop stopped." : "No loop was running.",
+            "info",
+          );
           return;
         case "fixed": {
           const seconds = Math.max(MIN_DELAY_S, cmd.seconds);

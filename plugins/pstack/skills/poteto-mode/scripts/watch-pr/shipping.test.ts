@@ -189,6 +189,85 @@ const response = (pullRequest: unknown) => ({
   data: { repository: { pullRequest } },
 });
 
+describe("shipping GraphQL fixture", () => {
+  it("returns only selected PR fields without counting nested node ids", () => {
+    const pullRequest = { ...raw, mergeQueueEntry: { id: "queue" } };
+    expect(
+      fakeGitHub(pullRequest, [
+        "query={ repository { pullRequest { mergeQueueEntry { id } } } }",
+      ])
+    ).toEqual({
+      data: {
+        repository: { pullRequest: { mergeQueueEntry: { id: "queue" } } },
+      },
+    });
+    expect(pullRequest).toEqual({ ...raw, mergeQueueEntry: { id: "queue" } });
+  });
+
+  it("disables auto-merge without clearing the queue entry", () => {
+    const pullRequest = {
+      ...raw,
+      autoMergeRequest: { enabledAt: "now" },
+      mergeQueueEntry: { id: "queue" },
+    };
+    expect(
+      fakeGitHub(pullRequest, [
+        "query=mutation($id: ID!) { disablePullRequestAutoMerge(input: { pullRequestId: $id }) { clientMutationId } }",
+        "id=pr-id",
+      ])
+    ).toEqual({
+      data: { disablePullRequestAutoMerge: { clientMutationId: null } },
+    });
+    expect(pullRequest).toEqual({ ...raw, mergeQueueEntry: { id: "queue" } });
+  });
+
+  it("dequeues without clearing auto-merge", () => {
+    const pullRequest = {
+      ...raw,
+      autoMergeRequest: { enabledAt: "now" },
+      mergeQueueEntry: { id: "queue" },
+    };
+    expect(
+      fakeGitHub(pullRequest, [
+        "query=mutation($id: ID!) { dequeuePullRequest(input: { id: $id }) { clientMutationId } }",
+        "id=pr-id",
+      ])
+    ).toEqual({ data: { dequeuePullRequest: { clientMutationId: null } } });
+    expect(pullRequest).toEqual({
+      ...raw,
+      autoMergeRequest: { enabledAt: "now" },
+    });
+  });
+
+  it("rejects an unknown mutation with the original query in the error", () => {
+    const pullRequest = { ...raw };
+    expect(() =>
+      fakeGitHub(pullRequest, [
+        "query=mutation($id: ID!) { unknownMutation(input: { id: $id }) { clientMutationId } }",
+        "id=pr-id",
+      ])
+    ).toThrow(
+      new Error(
+        "not a mutation GitHub accepts: query=mutation($id: ID!) { unknownMutation(input: { id: $id }) { clientMutationId } }"
+      )
+    );
+    expect(pullRequest).toEqual(raw);
+  });
+
+  for (const name of ["constructor", "toString", "__proto__"]) {
+    it(`preserves the inherited ${name} input rejection`, () => {
+      const pullRequest = { ...raw };
+      expect(() =>
+        fakeGitHub(pullRequest, [
+          `query=mutation($id: ID!) { ${name}(input: { id: $id }) { clientMutationId } }`,
+          "id=pr-id",
+        ])
+      ).toThrow(new Error(`${name} input requires undefined, got id`));
+      expect(pullRequest).toEqual(raw);
+    });
+  }
+});
+
 describe("shipping GitHub boundary", () => {
   it("reads the current base target instead of the PR's stored base OID", async () => {
     let query = "";

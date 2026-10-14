@@ -252,10 +252,7 @@ export class PiChild {
 
 // Splits pi's stdout into lines on LF only: a Unicode line separator is valid
 // inside a JSON string.
-export function lineSplitter(onLine: (line: string) => void): {
-  write(chunk: Buffer | string): void;
-  end(): void;
-} {
+export function lineSplitter(onLine: (line: string) => void) {
   const decoder = new StringDecoder("utf8");
   let buffered = "";
   const feed = (text: string) => {
@@ -265,7 +262,7 @@ export function lineSplitter(onLine: (line: string) => void): {
     for (const line of lines) onLine(line);
   };
   return {
-    write: (chunk) => feed(decoder.write(chunk)),
+    write: (chunk: Buffer | string) => feed(decoder.write(chunk)),
     end: () => {
       feed(decoder.end());
       if (buffered) onLine(buffered);
