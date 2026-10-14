@@ -57,8 +57,7 @@ export interface ChildExit {
 
 function assistantText(content: unknown[]): string {
   return content
-    .filter((part) => Value.Check(textPart, part))
-    .map((part) => part.text)
+    .flatMap((part) => (Value.Check(textPart, part) ? [part.text] : []))
     .join("\n")
     .trim();
 }

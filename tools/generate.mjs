@@ -76,7 +76,11 @@ import {
 const repo = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 const EFFORT_AGENTS = `${PLUGIN}/effort-agents`;
-const PROMPT_RUNTIMES = RUNTIMES.filter((runtime) => runtime.prompts);
+// Only the truthy branch survives this filter. Narrow that result without
+// claiming that its excluded branch cannot contain an empty string.
+const PROMPT_RUNTIMES = /** @type {Extract<(typeof RUNTIMES)[number], { prompts: string }>[]} */ (
+  RUNTIMES.filter((runtime) => runtime.prompts)
+);
 
 const VERSIONED_MANIFESTS = [
   ".claude-plugin/marketplace.json",
@@ -204,6 +208,7 @@ export function parseFrontmatter(text) {
  * @returns {SkillMetadata[]}
  */
 export function agentSkills(skillsDir) {
+  /** @type {SkillMetadata[]} */
   const skills = [];
   for (const entry of readdirSync(skillsDir).sort()) {
     const path = join(skillsDir, entry, "SKILL.md");
@@ -259,6 +264,7 @@ export function validatePluginLayout(pluginRoot) {
   // #58: a plugin's agents register under the plugin namespace, so a dispatch
   // of the bare name errors at runtime with "Agent type 'x' not found".
   const agents = pluginAgentPaths(pluginRoot).map((p) => basename(p, ".md"));
+  /** @type {string[]} */
   const bareDispatches = [];
   for (const file of markdownFiles(join(pluginRoot, "skills"))) {
     readFileSync(file, "utf8")
@@ -286,6 +292,7 @@ export function validatePluginLayout(pluginRoot) {
   }
   // tools/sync.mjs writes an unresolved three-way merge with git's markers and
   // still advances the pin, so this check is what keeps it out of a release.
+  /** @type {string[]} */
   const markers = [];
   for (const file of walk(pluginRoot)) {
     if (!lstatSync(file).isFile()) continue;
@@ -530,15 +537,19 @@ export function regions(models) {
   }
   const reviewers = requiredRole(models, "interrogate reviewers").models;
   return [
-    ...[...rolesBySkill]
-      .filter(([skill]) => skill !== "interrogate")
-      .map(([skill, roles]) => ({
-        file: skillFile(skill),
-        name: "Models section",
-        locate: section("Models"),
-        appendHeading: "## Models",
-        render: () => blankPadded(modelsSection(roles)),
-      })),
+    ...[...rolesBySkill].flatMap(([skill, roles]) =>
+      skill === "interrogate"
+        ? []
+        : [
+            {
+              file: skillFile(skill),
+              name: "Models section",
+              locate: section("Models"),
+              appendHeading: "## Models",
+              render: () => blankPadded(modelsSection(roles)),
+            },
+          ],
+    ),
     {
       file: skillFile("interrogate"),
       name: "reviewer table",
@@ -603,7 +614,10 @@ export function regions(models) {
   ];
 }
 
-const PREAMBLE_RUNTIMES = RUNTIMES.filter((runtime) => runtime.preamble);
+// As above, preserve the truthiness test and the original runtime objects.
+const PREAMBLE_RUNTIMES = /** @type {((typeof RUNTIMES)[number] & { preamble: string })[]} */ (
+  RUNTIMES.filter((runtime) => runtime.preamble)
+);
 const DRIVER_LINE =
   "Resolve the driver skill through [poteto-mode's Non-negotiables](../SKILL.md#non-negotiables).";
 const DRIVER_PLAYBOOKS = [
@@ -640,6 +654,7 @@ export function noteSkills(runtime, markdown) {
 // playbooks that drive an app. A runtime's preamble replaces the preamble of
 // the runtime it `displaces`. Every runtime's table must name real skills,
 // whether or not it stamps a preamble.
+/** @param {string} [root] */
 export function loadLeadLines(root = repo) {
   /** @type {Map<string, string[]>} */
   const leads = new Map();
@@ -674,6 +689,7 @@ export function stampLeadLine(text, lead) {
   const bodyStart = lines[0] === "---" ? lines.indexOf("---", 1) + 1 : 0;
   const heading = lines.findIndex((l, i) => i >= bodyStart && /^#{1,6} /.test(l));
   if (heading === -1) return null;
+  /** @type {string[]} */
   const rest = [];
   // A removed lead takes the blank above it only when a blank or the end
   // follows, so the paragraphs on either side of it stay apart.
@@ -814,10 +830,13 @@ export function parseModels(raw, skillExists) {
   return resolveModels(raw);
 }
 
+/** @param {string} [root] */
 export function loadModels(root = repo) {
   const skillsDir = join(root, SKILLS);
-  return parseModels(JSON.parse(readFileSync(join(root, PLUGIN, "models.json"), "utf8")), (skill) =>
-    existsSync(join(skillsDir, skill, "SKILL.md")),
+  return parseModels(
+    JSON.parse(readFileSync(join(root, PLUGIN, "models.json"), "utf8")),
+    /** @param {string} skill */
+    (skill) => existsSync(join(skillsDir, skill, "SKILL.md")),
   );
 }
 
@@ -840,6 +859,7 @@ function portFrontmatter(file, text) {
   const name = skill ?? file.match(/^plugins\/pstack\/agents\/([^/]+)\.md$/)?.[1];
   if (!name) return text;
   const { body } = parseFrontmatter(text);
+  /** @type {string[]} */
   const kept = [];
   let dropping = false;
   for (const line of text.slice(0, text.length - body.length).split("\n")) {
@@ -919,8 +939,14 @@ export function effortSection(levels, defaultEffort) {
 // base agent reads as the delegate /poteto-mode runs spawn. A description is
 // written unquoted, so it must not open with a backtick: strict YAML rejects it.
 /**
+ * @typedef {object} EffortAgent
+ * @property {string} name
+ * @property {string} text
+ */
+/**
  * @param {readonly string[]} levels
  * @param {string} potetoAgent
+ * @returns {EffortAgent[]}
  */
 export function effortAgents(levels, potetoAgent) {
   const { body } = parseFrontmatter(potetoAgent);
@@ -1043,6 +1069,7 @@ export function strayModelSlugs(file, text, models) {
     .filter((r) => r.file === file)
     .map((r) => r.locate(lines))
     .filter((range) => range !== null);
+  /** @type {string[]} */
   const strays = [];
   lines.forEach((line, i) => {
     if (!SLUG_RE.test(line)) return;
@@ -1120,13 +1147,15 @@ const HOOKS_FILE = Type.Object({ hooks: Type.Record(Type.String(), Type.Array(MA
  * @param {string} subject
  */
 function schemaFaults(schema, value, subject) {
-  return [...Value.Errors(schema, value)]
-    .filter((error) => error.keyword !== "boolean")
-    .map((error) =>
-      error.keyword === "additionalProperties"
-        ? `unknown key ${error.params.additionalProperties.join(", ")}`
-        : `${error.instancePath.slice(1).replaceAll("/", ".") || subject} ${error.message}`,
-    );
+  return [...Value.Errors(schema, value)].flatMap((error) =>
+    error.keyword === "boolean"
+      ? []
+      : [
+          error.keyword === "additionalProperties"
+            ? `unknown key ${error.params.additionalProperties.join(", ")}`
+            : `${error.instancePath.slice(1).replaceAll("/", ".") || subject} ${error.message}`,
+        ],
+  );
 }
 
 // A hooks file must have the documented shape, every ${<root>}/<path> a
@@ -1159,6 +1188,7 @@ function commandPathFaults(command, event, root, statOf) {
   if (!refs.length) {
     return [`${event}: command does not reference \${${root}}: ${command}`];
   }
+  /** @type {string[]} */
   const faults = [];
   const executed = command.replace(/^"/, "").startsWith(`\${${root}}/`);
   for (const [i, rel] of refs.entries()) {
@@ -1215,8 +1245,14 @@ export function validateHooks(
  * @typedef {(text: string) => string} TextEdit
  */
 /**
+ * @typedef {object} GeneratedPlan
+ * @property {Readonly<Record<string, string>>} files
+ * @property {readonly string[]} ownedDirs
+ */
+/**
  * @param {string} root
  * @param {import("./model-policy.mjs").ResolvedModels} [models]
+ * @returns {GeneratedPlan}
  */
 export function plan(root, models) {
   /** @param {string} rel */
@@ -1296,6 +1332,11 @@ export function plan(root, models) {
   return { files, ownedDirs: OWNED_DIRS };
 }
 
+/**
+ * @param {string} root
+ * @param {string} path
+ * @returns {import("node:fs").Stats | null}
+ */
 function lstatNoSymlinks(root, path) {
   let at = root;
   let st = null;
@@ -1309,7 +1350,18 @@ function lstatNoSymlinks(root, path) {
   return st;
 }
 
+/**
+ * @typedef {object} PendingChange
+ * @property {"write" | "remove"} kind
+ * @property {string} path
+ */
+/**
+ * @param {string} root
+ * @param {GeneratedPlan} intended
+ * @returns {PendingChange[]}
+ */
 export function changes(root, intended) {
+  /** @type {PendingChange[]} */
   const pending = [];
   for (const [path, text] of Object.entries(intended.files)) {
     const st = lstatNoSymlinks(root, path);
@@ -1330,6 +1382,16 @@ export function changes(root, intended) {
   return pending;
 }
 
+/**
+ * @typedef {object} ApplyOptions
+ * @property {(message: string) => void} [log]
+ */
+/**
+ * @param {string} root
+ * @param {GeneratedPlan} intended
+ * @param {ApplyOptions} [options]
+ * @returns {PendingChange[]}
+ */
 export function apply(root, intended, { log = console.log } = {}) {
   const pending = changes(root, intended);
   for (const { kind, path } of pending) {
@@ -1348,8 +1410,17 @@ export function apply(root, intended, { log = console.log } = {}) {
 // Every cross-file contract the tree under `root` breaks, one message per
 // failing check. The checks read the tree, not the plan, so on a stale tree
 // they see the stale copies. Without `models`, the policy load is one of the checks.
+/**
+ * @param {string} root
+ * @param {import("./model-policy.mjs").ResolvedModels} [models]
+ */
 export function problems(root, models) {
   const failures = [];
+  /**
+   * @template Result
+   * @param {() => Result} check
+   * @returns {Result | undefined}
+   */
   const attempt = (check) => {
     try {
       return check();
@@ -1359,12 +1430,19 @@ export function problems(root, models) {
   };
   const pluginRoot = join(root, PLUGIN);
   const skillsDir = join(root, SKILLS);
+  /** @param {string} rel */
   const read = (rel) => readFileSync(join(root, rel), "utf8");
+  /** @param {string} rel */
   const pathExists = (rel) => existsSync(join(root, rel));
-  const packages = RUNTIMES.filter((runtime) => runtime.manifest)
+  // Keep the original truthy filter; only its retained entries have a path.
+  const manifested = /** @type {Extract<(typeof RUNTIMES)[number], { manifest: string }>[]} */ (
+    RUNTIMES.filter((runtime) => runtime.manifest)
+  );
+  const packages = manifested
     .map((runtime) =>
       attempt(() => {
         const text = read(runtime.manifest);
+        /** @type {unknown} */
         let manifest;
         try {
           manifest = JSON.parse(text);
@@ -1376,8 +1454,11 @@ export function problems(root, models) {
         return { runtime, manifest, text };
       }),
     )
-    .filter(Boolean);
+    // attempt returns a package object or undefined, so this retains exactly
+    // the same entries as the original truthiness filter, in the same order.
+    .filter((packaged) => packaged !== undefined);
   models ??= attempt(() => loadModels(root));
+  /** @param {string} rel */
   const statOf = (rel) => {
     const full = join(pluginRoot, rel);
     if (!existsSync(full) || !pathIsInside(realpathSync(pluginRoot), realpathSync(full)))
@@ -1423,8 +1504,10 @@ export function problems(root, models) {
     attempt(() => packaged.runtime.validate({ ...packaged, read, pathExists }));
   attempt(() => validatePluginLayout(pluginRoot));
   attempt(() => validateAgentFrontmatter(pluginRoot));
+  /** @type {{ file: string, root?: string }} */
+  const claudeHooks = { file: "hooks/hooks.json" };
   const hooksFiles = [
-    { file: "hooks/hooks.json" },
+    claudeHooks,
     ...packages.flatMap(({ runtime, manifest }) =>
       (runtime.hooks?.(manifest) ?? []).map((file) => ({ file, root: runtime.pluginRootVar })),
     ),
@@ -1445,6 +1528,7 @@ function main() {
   const models = loadModels(repo);
   const intended = plan(repo, models);
   const failures = [];
+  /** @type {PendingChange[] | undefined} */
   let pending;
   try {
     pending = check ? changes(repo, intended) : apply(repo, intended);

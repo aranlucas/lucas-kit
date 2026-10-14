@@ -472,6 +472,8 @@ export function buildReviewThreads(
     else keys.add(key);
   }
   const passes = keys.size > 0 ? keys.size : keyless ? 1 : 0;
+  // Caller-owned getters require all resolved predicates before the mapping reads.
+  // oxlint-disable-next-line anti-slop/no-array-filter-map -- Keep the predicate-before-mapper boundary.
   return threads
     .filter((thread) => !thread.resolved)
     .map(({ id, firstComment }) => ({

@@ -44,8 +44,7 @@ export function findPiPackage() {
   const roots = [npmRoot(), homebrewRoot(), ...bunRoots()];
   return (
     roots
-      .filter(Boolean)
-      .map((root) => join(root, "@earendil-works/pi-coding-agent"))
+      .flatMap((root) => (root ? [join(root, "@earendil-works/pi-coding-agent")] : []))
       .find((dir) => existsSync(join(dir, "package.json"))) ?? null
   );
 }

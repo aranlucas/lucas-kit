@@ -441,7 +441,7 @@ suite("pstack on live pi", () => {
       const code = await new Promise((r) => proc.on("close", r));
       expect({ code, stderr: code === 0 ? "" : stderr }).toEqual({ code: 0, stderr: "" });
 
-      const ends = events.filter((e) => e.type === "message_end").map((e) => e.message);
+      const ends = events.flatMap((e) => (e.type === "message_end" ? [e.message] : []));
       const noticeAt = ends.findIndex((m) => m.role === "custom" && m.customType === "pstack-agent");
       expect(noticeAt).toBeGreaterThan(-1);
       const notice = ends[noticeAt];

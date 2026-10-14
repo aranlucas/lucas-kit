@@ -497,6 +497,99 @@ it("annotates Bugbot threads with distinct review-pass counts", () => {
   expect(threads.map((thread) => thread.bugbotReviewPasses)).toEqual([3, 3]);
 });
 
+describe("review thread read ordering", () => {
+  it("finishes every resolved predicate before reading selected thread ids", () => {
+    const reads: string[] = [];
+    let firstId = "before-later-predicate";
+    const threads = [
+      {
+        get firstComment() {
+          reads.push("first.comment");
+          return null;
+        },
+        get resolved() {
+          reads.push("first.resolved");
+          return false;
+        },
+        get id() {
+          reads.push("first.id");
+          return firstId;
+        },
+      },
+      {
+        get firstComment() {
+          reads.push("later.comment");
+          return null;
+        },
+        get resolved() {
+          reads.push("later.resolved");
+          firstId = "after-later-predicate";
+          return false;
+        },
+        get id() {
+          reads.push("later.id");
+          return "later";
+        },
+      },
+    ];
+
+    expect(buildReviewThreads(threads)).toEqual([
+      {
+        id: "after-later-predicate",
+        firstComment: null,
+        isBugbot: false,
+        bugbotReviewPasses: 0,
+      },
+      {
+        id: "later",
+        firstComment: null,
+        isBugbot: false,
+        bugbotReviewPasses: 0,
+      },
+    ]);
+    expect(reads).toEqual([
+      "first.comment",
+      "later.comment",
+      "first.resolved",
+      "later.resolved",
+      "first.id",
+      "first.comment",
+      "later.id",
+      "later.comment",
+    ]);
+  });
+
+  it("throws a later predicate failure before an earlier mapping failure", () => {
+    const reads: string[] = [];
+    const predicateFailure = new Error("later resolved getter failed");
+    const mappingFailure = new Error("earlier id getter failed");
+    const threads = [
+      {
+        firstComment: null,
+        get resolved() {
+          reads.push("first.resolved");
+          return false;
+        },
+        get id(): string {
+          reads.push("first.id");
+          throw mappingFailure;
+        },
+      },
+      {
+        id: "later",
+        firstComment: null,
+        get resolved(): boolean {
+          reads.push("later.resolved");
+          throw predicateFailure;
+        },
+      },
+    ];
+
+    expect(() => buildReviewThreads(threads)).toThrow(predicateFailure);
+    expect(reads).toEqual(["first.resolved", "later.resolved"]);
+  });
+});
+
 describe("review thread pagination", () => {
   const thread = (id: string, resolved = false) => ({
     id,

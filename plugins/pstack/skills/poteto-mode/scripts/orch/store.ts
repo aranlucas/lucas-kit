@@ -873,8 +873,7 @@ function summarize(
     ledgerVerdicts: countValues(ledgerRows.map((row) => row.verdict)),
     frontierGeneration: currentFrontier.generation,
     openGateIds: gateRows
-      .filter((gate): gate is OpenGate => gate.kind === "open")
-      .map((gate) => gate.id)
+      .flatMap((gate) => gate.kind === "open" ? [gate.id] : [])
       .sort(),
   };
 }

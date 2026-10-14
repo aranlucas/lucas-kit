@@ -725,10 +725,12 @@ describe("plan, changes, apply", () => {
     const outside = scratch("pstack-outside-");
     mkdirSync(join(root, "skills"));
     symlinkSync(outside, join(root, "skills/out"), "dir");
-    for (const intended of [
+    /** @type {import("../tools/generate.mjs").GeneratedPlan[]} */
+    const plans = [
       { files: { "skills/out/a.md": "A" }, ownedDirs: ["skills/out"] },
       { files: { "skills/out/deep/a.md": "A" }, ownedDirs: [] },
-    ]) {
+    ];
+    for (const intended of plans) {
       expect(() => apply(root, intended, quiet)).toThrow("skills/out is a symlink; the generator never writes through one");
     }
     expect(readdirSync(outside)).toEqual([]);

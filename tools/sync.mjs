@@ -676,9 +676,9 @@ export function syncComponent({
   report.forked = report.forked.toSorted((a, b) => b.changed - a.changed);
   if (forks) {
     const outcomeOfPath = new Map(outcomes.map(({ rel, kind }) => [rel, kind]));
-    report.undeclared = outcomes
-      .filter(({ rel, kind }) => FORK_OUTCOMES.has(kind) && !forks.has(rel))
-      .map(({ rel }) => rel);
+    report.undeclared = outcomes.flatMap(({ rel, kind }) =>
+      FORK_OUTCOMES.has(kind) && !forks.has(rel) ? [rel] : [],
+    );
     for (const rel of forks.keys()) {
       const kind = outcomeOfPath.get(rel);
       if (FORK_OUTCOMES.has(kind)) continue;

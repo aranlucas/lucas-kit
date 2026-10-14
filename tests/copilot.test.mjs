@@ -116,7 +116,12 @@ describe("Copilot setup questions", () => {
 
   test("step 6's sheet shape has a line for every role in models.json", () => {
     const sheetInstructions = skill.slice(skill.indexOf("### 6. Write the override sheet"), skill.indexOf("### 7."));
-    const documentedRoles = [...sheetInstructions.matchAll(/^([a-z][a-z ,-]*): /gm)].map((m) => m[1]).filter((r) => r !== "session hook" && r !== "default effort");
+    const documentedRoles = [...sheetInstructions.matchAll(/^([a-z][a-z ,-]*): /gm)].flatMap(
+      (m) => {
+        const role = m[1];
+        return role === "session hook" || role === "default effort" ? [] : [role];
+      },
+    );
     expect(documentedRoles).toEqual(roles);
   });
 

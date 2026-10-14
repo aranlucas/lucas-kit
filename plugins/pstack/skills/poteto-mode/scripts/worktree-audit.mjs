@@ -138,7 +138,7 @@ export function pathSpellings(path, linksIn = symlinkTargets, stat = statSync) {
   // a filesystem may report one identity for several, and a spare spelling
   // costs a hold where a missed one can cost the worktree.
   const links = ancestors.flatMap((dir) => linksIn(dir).flatMap(([link, { id, name }]) =>
-    onPath.filter((target) => target === name || fileId(target, stat) === id).map((target) => [dir, link, target])));
+    onPath.flatMap((target) => target === name || fileId(target, stat) === id ? [[dir, link, target]] : [])));
   // Spell each directory from the root down, so a link's own directory is
   // already spelled when the link is applied. A link back up to an ancestor of
   // its directory is applied through that directory's resolved spelling only,
@@ -338,7 +338,7 @@ export function audit({
   const found = bind(missing, (roots) => {
     for (const root of roots) warn(`warn: ${root} not found; LAST_CHAT column will be empty`);
     if (roots.length) return UNKNOWN;
-    const knownSpellings = new Map([...spellings].filter(([, fact]) => fact.known).map(([path, fact]) => [path, fact.value]));
+    const knownSpellings = new Map([...spellings].flatMap(([path, fact]) => fact.known ? [[path, fact.value]] : []));
     return discover(() => lastChats(transcripts, knownSpellings), scanFailed);
   });
   const chats = new Map(live.map((path) => [
