@@ -9,6 +9,7 @@ export function nonEmpty<T>(items: readonly T[]): NonEmpty<T> | null {
 export function parsePrNumber(value: unknown, label = "PR number"): PrNumber {
   if (typeof value !== "number" || !Number.isInteger(value) || value <= 0)
     throw new Error(`${label} must be a positive integer`);
+  // SAFETY: The guard proved a positive integer number, the invariant represented by the erased PrNumber brand.
   return value as PrNumber;
 }
 export interface Repository {

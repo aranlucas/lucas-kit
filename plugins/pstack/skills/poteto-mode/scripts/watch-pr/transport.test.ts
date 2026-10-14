@@ -94,6 +94,7 @@ console.log(JSON.stringify(value));
       },
     }
   );
+  // SAFETY: This fixture alone writes each log line as JSON.stringify(process.argv.slice(2)), whose entries are strings.
   return {
     ...result,
     elapsed: performance.now() - started,
@@ -137,6 +138,7 @@ it("keeps a fork main branch distinct from destination main during stack discove
   });
 });
 
+// SAFETY: Parsed verdicts are widened to unknown; this boundary asserts no shape and leaves checks to callers.
 const verdicts = (stdout: string): unknown[] =>
   stdout
     .trim()

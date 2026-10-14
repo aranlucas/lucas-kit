@@ -430,7 +430,7 @@ describe("review activity reader", () => {
     const failure = (() => {
       try {
         parseReviewActivity({
-          ...(graphql({}) as object),
+          ...graphql({}),
           errors: [{ message: "Something went wrong" }],
         });
       } catch (error) {
@@ -438,6 +438,7 @@ describe("review activity reader", () => {
       }
     })();
     expect(failure).toBeInstanceOf(WatcherQueryError);
+    // SAFETY: The preceding toBeInstanceOf matcher throws unless failure is a WatcherQueryError.
     expect((failure as WatcherQueryError).failure).toMatchObject({
       kind: "missing-key",
       retryable: true,

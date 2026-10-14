@@ -15,6 +15,7 @@ function invalid(detail: string): never {
 export function object(value: unknown, label: string): Record<string, unknown> {
   if (typeof value !== "object" || value === null || Array.isArray(value))
     invalid(`${label} must be an object`);
+  // SAFETY: The guard rejected null, arrays, and non-objects; property values remain unknown for field-level validation.
   return value as Record<string, unknown>;
 }
 
