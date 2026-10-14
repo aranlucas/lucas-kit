@@ -2,11 +2,19 @@ import { Type } from "typebox";
 import { Value } from "typebox/value";
 
 const selection = Type.Union([Type.String(), Type.Array(Type.String())]);
-const role = Type.Object({
+
+const roleFields = {
   role: Type.String(),
   skill: Type.String(),
-  models: selection,
-});
+};
+
+const tierRole = Type.Object({ ...roleFields, models: Type.String() });
+
+const role = Type.Union([
+  tierRole,
+  Type.Object({ ...roleFields, models: Type.Array(Type.String()) }),
+]);
+
 const policy = Type.Object({
   available: Type.Array(Type.String()),
   efforts: Type.Array(Type.String()),
@@ -22,6 +30,7 @@ const policy = Type.Object({
 });
 
 /** @typedef {import("typebox").Static<typeof policy>} ModelPolicy */
+/** @typedef {import("typebox").Static<typeof tierRole>} TierRole */
 /**
  * @typedef {object} ResolvedRole
  * @property {string} role
@@ -39,4 +48,13 @@ const policy = Type.Object({
  */
 export function isModelPolicy(value) {
   return Value.Check(policy, value);
+}
+
+/**
+ * Select the tier branch of an already validated role without changing it.
+ * @param {ModelPolicy["roles"][number]} entry
+ * @returns {entry is TierRole}
+ */
+export function usesTier(entry) {
+  return typeof entry.models === "string";
 }

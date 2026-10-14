@@ -2,7 +2,7 @@
 // catalog. The fixture is a trimmed copy of a real catalog: Claude names its
 // reasoning option `effort`, Codex and Grok name it `reasoningEffort`, and an
 // unauthenticated provider lists models it cannot run.
-import { describe, expect, test } from "vitest";
+import { assert, describe, expect, test } from "vitest";
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -229,6 +229,8 @@ describe("the T3 preamble", () => {
 
   test("replaces another runtime's lead line instead of stacking under it", () => {
     const text = `# Title\n\n${codex.preamble}\n\nBody.\n`;
+    assert.exists(t3);
+    assert.exists(t3.preamble);
     expect(stampLeadLine(text, t3.preamble)).toBe(`# Title\n\n${t3.preamble}\n\nBody.\n`);
   });
 

@@ -2,7 +2,10 @@
 // generator iterates, with each runtime's Model names renderer, models.json
 // check, versioned manifest, packaging validator, and hooks files.
 
-import { panelFamilies, parseEntry } from "../plugins/pstack/skills/setup-pstack/scripts/t3-sheet.mjs";
+import {
+  panelFamilies,
+  parseEntry,
+} from "../plugins/pstack/skills/setup-pstack/scripts/t3-sheet.mjs";
 import { code, codeList, PLUGIN, SKILLS } from "./plugin.mjs";
 
 // Every runtime other than Claude Code that reads the skills through a mapping
@@ -29,7 +32,10 @@ export const RUNTIMES = [
     prompts: `${PLUGIN}/.codex-plugin/prompts`,
     manifest: `${PLUGIN}/.codex-plugin/plugin.json`,
     validate: ({ manifest, read, pathExists }) =>
-      validateCodexMarketplace(read(".agents/plugins/marketplace.json"), { expectedName: manifest.name, pathExists }),
+      validateCodexMarketplace(read(".agents/plugins/marketplace.json"), {
+        expectedName: manifest.name,
+        pathExists,
+      }),
     hooks: (manifest) => [manifest.hooks],
   },
   {
@@ -50,7 +56,10 @@ export const RUNTIMES = [
     // so it gets its own hooks file and never runs the Claude Code hooks.
     manifest: `${PLUGIN}/.github/plugin/plugin.json`,
     validate: ({ manifest, read, pathExists }) =>
-      validateCopilotManifest(manifest, { claude: JSON.parse(read(`${PLUGIN}/.claude-plugin/plugin.json`)), pathExists }),
+      validateCopilotManifest(manifest, {
+        claude: JSON.parse(read(`${PLUGIN}/.claude-plugin/plugin.json`)),
+        pathExists,
+      }),
     hooks: (manifest) => [manifest.hooks],
     pluginRootVar: "COPILOT_PLUGIN_ROOT",
   },
@@ -97,10 +106,12 @@ function checkCodexModels(codex, { raw, fail, unique }) {
 // so every table maps exactly the available aliases to that provider's models.
 function checkPiModels(pi, { raw, fail, isObject }) {
   for (const key of Object.keys(pi)) {
-    if (key !== "fallback" && key !== "models") fail(`pi names "${key}"; its keys are "fallback" and "models"`);
+    if (key !== "fallback" && key !== "models")
+      fail(`pi names "${key}"; its keys are "fallback" and "models"`);
   }
   if (!isObject(pi.models)) fail('pi needs a "models" object');
-  if (!Object.hasOwn(pi.models, pi.fallback)) fail(`pi.fallback "${pi.fallback}" is not a provider in pi.models`);
+  if (!Object.hasOwn(pi.models, pi.fallback))
+    fail(`pi.fallback "${pi.fallback}" is not a provider in pi.models`);
   if (typeof pi.fallback !== "string") fail("pi.fallback must be a string");
   for (const [provider, table] of Object.entries(pi.models)) {
     const at = `pi.models.${provider}`;
@@ -110,7 +121,12 @@ function checkPiModels(pi, { raw, fail, isObject }) {
     }
     for (const [alias, id] of Object.entries(table)) {
       if (!raw.available.includes(alias)) fail(`${at} names "${alias}", which is not in available`);
-      if (typeof id !== "string" || !id.startsWith(`${provider}/`) || /\s/.test(id) || id === `${provider}/`) {
+      if (
+        typeof id !== "string" ||
+        !id.startsWith(`${provider}/`) ||
+        /\s/.test(id) ||
+        id === `${provider}/`
+      ) {
         fail(`${at} "${alias}" is "${id}", not a ${provider}/<id>`);
       }
     }
@@ -126,7 +142,8 @@ function checkT3Models(t3, { raw, fail, unique }) {
   }
   for (const [tier, value] of Object.entries(t3)) {
     if (!Object.hasOwn(raw.tiers, tier)) fail(`t3 names "${tier}", which is not a tier`);
-    if (tier !== "panel" && typeof value !== "string") fail(`t3 "${tier}" must be one target, not a list`);
+    if (tier !== "panel" && typeof value !== "string")
+      fail(`t3 "${tier}" must be one target, not a list`);
     unique([value].flat(), `t3 "${tier}"`);
     const entries = [value].flat().map((entry) => {
       if (typeof entry !== "string" || entry !== entry.trim().split(/\s+/).join(" ")) {
@@ -141,15 +158,19 @@ function checkT3Models(t3, { raw, fail, unique }) {
       if (!parsed) fail(`t3 "${tier}" must name a target, not inherit the parent`);
       return parsed;
     });
-    if (tier === "panel" && panelFamilies(entries).size < 2) fail("t3 panel needs at least two model families");
+    if (tier === "panel" && panelFamilies(entries).size < 2)
+      fail("t3 panel needs at least two model families");
   }
   for (const role of raw.roles) {
-    if (typeof role.models !== "string") fail(`role "${role.role}" lists models; the t3 sheet needs it to name a tier`);
+    if (typeof role.models !== "string")
+      fail(`role "${role.role}" lists models; the t3 sheet needs it to name a tier`);
   }
 }
 
 export function t3ModelNamesSection(models) {
-  const rows = models.roles.map((r) => `${r.role}: ${[models.t3[r.tier]].flat().join(", ")}`).join("\n");
+  const rows = models.roles
+    .map((r) => `${r.role}: ${[models.t3[r.tier]].flat().join(", ")}`)
+    .join("\n");
   return (
     "On T3 the sheet names T3 targets, not the Claude aliases in each skill's Models section. Resolve every role " +
     "from the sheet (see [The sheet](#the-sheet)). A role with no line runs on its tier's default below, and the " +
@@ -177,12 +198,17 @@ export function codexModelNamesSection(models) {
   );
 }
 
+/** @param {import("./model-policy.mjs").ResolvedModels} models */
 export function piModelNamesSection(models) {
   const { fallback, models: tables } = models.pi;
   const columns = Object.keys(tables);
   const table =
     `| Alias | ${columns.map(code).join(" | ")} |\n| --- |${" --- |".repeat(columns.length)}\n` +
-    models.available.map((alias) => `| ${code(alias)} | ${columns.map((p) => code(tables[p][alias])).join(" | ")} |`).join("\n");
+    models.available
+      .map(
+        (alias) => `| ${code(alias)} | ${columns.map((p) => code(tables[p][alias])).join(" | ")} |`,
+      )
+      .join("\n");
   return (
     "Skills name models by the Claude aliases in their Models sections. On Pi, pass the alias as the `agent` " +
     "tool's `model`. The pstack extension resolves it in the column of the provider the session's current model " +
@@ -207,7 +233,9 @@ export function validateCodexMarketplace(text, { expectedName, pathExists }) {
   const manifest = JSON.parse(text);
   const plugins = manifest.plugins ?? [];
   if (plugins.length !== 1) {
-    throw new Error(`.agents/plugins/marketplace.json: expected 1 plugin entry, found ${plugins.length}`);
+    throw new Error(
+      `.agents/plugins/marketplace.json: expected 1 plugin entry, found ${plugins.length}`,
+    );
   }
   const [plugin] = plugins;
   if (plugin.name !== expectedName) {
@@ -217,7 +245,9 @@ export function validateCodexMarketplace(text, { expectedName, pathExists }) {
   }
   const path = plugin.source?.path;
   if (!path || !pathExists(path)) {
-    throw new Error(`.agents/plugins/marketplace.json: source.path "${path}" does not resolve to a directory`);
+    throw new Error(
+      `.agents/plugins/marketplace.json: source.path "${path}" does not resolve to a directory`,
+    );
   }
 }
 
@@ -225,7 +255,8 @@ export function validateCodexMarketplace(text, { expectedName, pathExists }) {
 // hooks file in the plugin. Copilot loads skills/ and agents/ by default.
 export function validateCopilotManifest(manifest, { claude, pathExists }) {
   const at = `${PLUGIN}/.github/plugin/plugin.json`;
-  if (manifest.name !== claude.name) throw new Error(`${at}: name "${manifest.name}" != Claude Code manifest name "${claude.name}"`);
+  if (manifest.name !== claude.name)
+    throw new Error(`${at}: name "${manifest.name}" != Claude Code manifest name "${claude.name}"`);
   if (typeof manifest.hooks !== "string" || !pathExists(`${PLUGIN}/${manifest.hooks}`)) {
     throw new Error(`${at}: hooks "${manifest.hooks}" is not a file in the plugin`);
   }
@@ -242,21 +273,25 @@ export function validatePiPackage(text, { pathExists }) {
     throw new Error(`package.json: ${message}`);
   };
   if (!manifest.keywords?.includes("pi-package")) fail('keywords must include "pi-package"');
-  if (Object.keys(manifest.dependencies ?? {}).length) fail("the Pi package has no runtime dependencies");
+  if (Object.keys(manifest.dependencies ?? {}).length)
+    fail("the Pi package has no runtime dependencies");
   for (const [key, required] of Object.entries(PI_PACKAGE)) {
     const listed = manifest.pi?.[key] ?? [];
     for (const path of listed) {
-      if (!pathExists(path.replace(/^\.\//, ""))) fail(`pi.${key} names ${path}, which does not exist`);
+      if (!pathExists(path.replace(/^\.\//, "")))
+        fail(`pi.${key} names ${path}, which does not exist`);
     }
     if (!listed.includes(`./${required}`)) fail(`pi.${key} must list ./${required}`);
   }
 }
 
 // The skills that dispatch on role models, which on Copilot need a model sheet.
+/** @param {import("./model-policy.mjs").ResolvedModels} models */
 export const roleSkills = (models) => [...new Set(models.roles.map((r) => r.skill))].sort();
 
 // Copilot ships no default slugs: the models a Copilot account can reach vary
 // by plan and policy, so the user picks them in setup-pstack.
+/** @param {import("./model-policy.mjs").ResolvedModels} models */
 export function copilotModelNamesSection(models) {
   const strongest = models.roles.filter((r) => r.tier === "strongest");
   return (
@@ -270,7 +305,7 @@ export function copilotModelNamesSection(models) {
     "- Read the sheet only when that block and the hook's `sheet invalid` or no-sheet note are all missing, as in a " +
     "skills-only install with no hook. `view`, `create`, and `edit` take literal paths and expand neither `~` nor " +
     "`$COPILOT_HOME`, so print the sheet's absolute path with `bash` first (" +
-    "`echo \"${COPILOT_HOME:-$HOME/.copilot}/pstack-models.md\"`" +
+    '`echo "${COPILOT_HOME:-$HOME/.copilot}/pstack-models.md"`' +
     ") and read and write exactly that path; do not append `.copilot` or any other segment to it. A session with its " +
     "own `COPILOT_HOME` then never touches `~/.copilot`.\n" +
     `- No sheet, or the hook reports \`sheet invalid\`: before a skill that needs a role model (${roleSkills(models).map(code).join(", ")}), stop, load ` +

@@ -165,7 +165,7 @@ describe("role labels reach the prose", () => {
         const owned = regions(models)
           .filter((r) => r.file === relative(repoRoot, file))
           .map((r) => r.locate(lines))
-          .filter(Boolean);
+          .filter((range) => range !== null);
         return lines.filter((_, i) => !owned.some(([s, e]) => i >= s && i < e)).join("\n");
       })
       .join("\n");

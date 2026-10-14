@@ -63,9 +63,15 @@ import { Type } from "typebox";
 import { Value } from "typebox/value";
 
 import { code, codeList, PLUGIN, SKILLS } from "./plugin.mjs";
-import { isModelPolicy } from "./model-policy.mjs";
+import { isModelPolicy, usesTier } from "./model-policy.mjs";
 import { RUNTIMES, roleSkills } from "./runtimes.mjs";
-import { markdownFiles, pathIsInside, validateProsePaths, validateSkillsTree, walk } from "./validate-skills.mjs";
+import {
+  markdownFiles,
+  pathIsInside,
+  validateProsePaths,
+  validateSkillsTree,
+  walk,
+} from "./validate-skills.mjs";
 
 const repo = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -105,6 +111,11 @@ export const OWNED_DIRS = [
 // Exactly one "version" field per manifest is a precondition: a second one
 // (say, from a future nested object) would make the blind replace ambiguous,
 // so fail loudly and force this function to grow a targeted path instead.
+/**
+ * @param {string} text
+ * @param {string} version
+ * @param {string} file
+ */
 export function stampVersion(text, version, file) {
   const fields = text.match(/"version"\s*:\s*"[^"]*"/g) ?? [];
   if (fields.length !== 1) {
@@ -116,7 +127,9 @@ export function stampVersion(text, version, file) {
 // The lines outside fenced code blocks. A fence opens at three or more
 // backticks or tildes indented at most three spaces, and closes at the next
 // line that holds nothing but at least as many of the same character.
+/** @param {readonly string[]} lines */
 function outsideFences(lines) {
+  /** @type {string | null} */
   let fence = null;
   return lines.filter((line) => {
     const [, mark, after] = line.match(/^ {0,3}(`{3,}|~{3,})(.*)/) ?? [];
@@ -131,6 +144,10 @@ function outsideFences(lines) {
 
 // Plugin auto-update installs by version number (CONTRIBUTING, Releasing), so
 // a CHANGES entry whose VERSION bump was forgotten ships nothing.
+/**
+ * @param {string} changelog
+ * @param {string} version
+ */
 export function assertChangesHeading(changelog, version) {
   const lines = outsideFences(changelog.split("\n"));
   const current = lines.find((line) => line.startsWith(`## ${version} `));
@@ -141,21 +158,32 @@ export function assertChangesHeading(changelog, version) {
   // shape of a preamble section such as "## About this file". The word is
   // taken whole and searched from the start of each run of digits, so a long
   // run of hashes or digits is read once.
-  const leadsWithVersion = (line) => /(?:^|\D)\d+\.\d+\.\d/.test(line.match(/^#+\s*(\S*)/)?.[1] ?? "");
+  /** @param {string} line */
+  const leadsWithVersion = (line) =>
+    /(?:^|\D)\d+\.\d+\.\d/.test(line.match(/^#+\s*(\S*)/)?.[1] ?? "");
   const newest = lines.find(leadsWithVersion);
-  if (newest !== current) throw new Error(`CHANGES.md's newest release heading is "${newest}", but VERSION is ${version}`);
+  if (newest !== current)
+    throw new Error(
+      `CHANGES.md's newest release heading is "${newest}", but VERSION is ${version}`,
+    );
   const headings = lines.filter((line) => /^## \d+\.\d+\.\d+/.test(line));
   const malformed = headings.filter((line) => !/^## \d+\.\d+\.\d+ - \S/.test(line));
   if (malformed.length) {
-    throw new Error(`CHANGES.md release headings read "## <version> - <title>":\n${malformed.join("\n")}`);
+    throw new Error(
+      `CHANGES.md release headings read "## <version> - <title>":\n${malformed.join("\n")}`,
+    );
   }
   const versions = headings.map((line) => line.split(" ")[1]);
-  const repeated = headings.filter((_, i) => versions.indexOf(versions[i]) !== versions.lastIndexOf(versions[i]));
-  if (repeated.length) throw new Error(`CHANGES.md heads two entries with one version:\n${repeated.join("\n")}`);
+  const repeated = headings.filter(
+    (_, i) => versions.indexOf(versions[i]) !== versions.lastIndexOf(versions[i]),
+  );
+  if (repeated.length)
+    throw new Error(`CHANGES.md heads two entries with one version:\n${repeated.join("\n")}`);
 }
 
 // Split a Markdown file into its YAML frontmatter and the text after it.
 // `data` is null when the file does not open with a frontmatter block.
+/** @param {string} text */
 export function parseFrontmatter(text) {
   const block = text.match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
   if (!block) return { data: null, body: text };
@@ -172,7 +200,8 @@ export function agentSkills(skillsDir) {
     if (!statSync(join(skillsDir, entry)).isDirectory() || !existsSync(path)) continue;
     const front = parseFrontmatter(readFileSync(path, "utf8")).data ?? {};
     const name = front.name;
-    if (name !== entry) throw new Error(`${path}: frontmatter name "${name}" != directory "${entry}"`);
+    if (name !== entry)
+      throw new Error(`${path}: frontmatter name "${name}" != directory "${entry}"`);
     if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(name) || name.length > 64) {
       throw new Error(`${path}: frontmatter name "${name}" is not a portable Agent Skills name`);
     }
@@ -181,13 +210,17 @@ export function agentSkills(skillsDir) {
       throw new Error(`${path}: skill has no description frontmatter`);
     }
     if (description.length > 1024) {
-      throw new Error(`${path}: description exceeds the portable Agent Skills limit of 1024 characters`);
+      throw new Error(
+        `${path}: description exceeds the portable Agent Skills limit of 1024 characters`,
+      );
     }
     // CHANGES 0.9.8: on a skill the flag makes the Skill tool refuse the
     // invocation outright, which breaks the SessionStart mandate. Upstream
     // ships it on every skill; the sync derivation strips it.
     if (front["disable-model-invocation"] === true) {
-      throw new Error(`${path}: disable-model-invocation: true breaks model-initiated entry (CHANGES 0.9.8)`);
+      throw new Error(
+        `${path}: disable-model-invocation: true breaks model-initiated entry (CHANGES 0.9.8)`,
+      );
     }
     const userInvocable = front["user-invocable"] !== false;
     // CHANGES 0.9.9: principle leaves are read by path from poteto-mode and
@@ -208,27 +241,37 @@ export function validatePluginLayout(pluginRoot) {
   // directory, which only that runtime reads.
   if (existsSync(join(pluginRoot, "commands"))) {
     const prompts = PROMPT_RUNTIMES.map((runtime) => runtime.prompts).join(", ");
-    throw new Error(`${PLUGIN}/commands/ exists; trampolines belong in ${prompts} (CHANGES 0.9.13)`);
+    throw new Error(
+      `${PLUGIN}/commands/ exists; trampolines belong in ${prompts} (CHANGES 0.9.13)`,
+    );
   }
   // #58: a plugin's agents register under the plugin namespace, so a dispatch
   // of the bare name errors at runtime with "Agent type 'x' not found".
   const agents = pluginAgentPaths(pluginRoot).map((p) => basename(p, ".md"));
   const bareDispatches = [];
   for (const file of markdownFiles(join(pluginRoot, "skills"))) {
-    readFileSync(file, "utf8").split("\n").forEach((line, i) => {
-      // The key is a whole word, but a letter that a backslash escapes does
-      // not extend it: \b would reject the key after the n of a literal "\n".
-      // The text before the key is consumed, not asserted, because a leading
-      // lookbehind scanned a long line about nine times slower.
-      for (const [, name] of line.matchAll(/(?:^|\W|\\[a-z])subagent_type[\s\\"'`*]*[:=][\s\\"'`*]*([a-z0-9-]+)(?![\w-]|\.\w)/g)) {
-        if (agents.includes(name)) {
-          bareDispatches.push(`${relative(pluginRoot, file)}:${i + 1}: subagent_type: "${name}" (use "pstack:${name}")`);
+    readFileSync(file, "utf8")
+      .split("\n")
+      .forEach((line, i) => {
+        // The key is a whole word, but a letter that a backslash escapes does
+        // not extend it: \b would reject the key after the n of a literal "\n".
+        // The text before the key is consumed, not asserted, because a leading
+        // lookbehind scanned a long line about nine times slower.
+        for (const [, name] of line.matchAll(
+          /(?:^|\W|\\[a-z])subagent_type[\s\\"'`*]*[:=][\s\\"'`*]*([a-z0-9-]+)(?![\w-]|\.\w)/g,
+        )) {
+          if (agents.includes(name)) {
+            bareDispatches.push(
+              `${relative(pluginRoot, file)}:${i + 1}: subagent_type: "${name}" (use "pstack:${name}")`,
+            );
+          }
         }
-      }
-    });
+      });
   }
   if (bareDispatches.length) {
-    throw new Error(`plugin agents are dispatched by their namespaced name:\n${bareDispatches.join("\n")}`);
+    throw new Error(
+      `plugin agents are dispatched by their namespaced name:\n${bareDispatches.join("\n")}`,
+    );
   }
   // tools/sync.mjs writes an unresolved three-way merge with git's markers and
   // still advances the pin, so this check is what keeps it out of a release.
@@ -237,12 +280,18 @@ export function validatePluginLayout(pluginRoot) {
     if (!lstatSync(file).isFile()) continue;
     const raw = readFileSync(file);
     if (raw.includes(0)) continue;
-    raw.toString("utf8").split("\n").forEach((line, i) => {
-      if (/^(<{7}|\|{7}|={7}|>{7})( |$)/.test(line)) markers.push(`${relative(pluginRoot, file)}:${i + 1}: ${line}`);
-    });
+    raw
+      .toString("utf8")
+      .split("\n")
+      .forEach((line, i) => {
+        if (/^(<{7}|\|{7}|={7}|>{7})( |$)/.test(line))
+          markers.push(`${relative(pluginRoot, file)}:${i + 1}: ${line}`);
+      });
   }
   if (markers.length) {
-    throw new Error(`unresolved sync conflict markers; resolve each hunk by hand:\n${markers.join("\n")}`);
+    throw new Error(
+      `unresolved sync conflict markers; resolve each hunk by hand:\n${markers.join("\n")}`,
+    );
   }
 }
 
@@ -270,7 +319,10 @@ export function slashCommands(markdown, skillNames) {
   if (!range) throw new Error(`${COMMANDS_DOC}: "${COMMAND_TABLE_HEADER}" table header not found`);
   const rows = lines.slice(range[0], range[1]).map((line, i) => {
     const m = line.match(/^\| `\/([^`]+)` \| (.+) \|$/);
-    if (!m) throw new Error(`${COMMANDS_DOC}: slash-command row ${i + 1} is not "| \`/name\` | text |": ${line}`);
+    if (!m)
+      throw new Error(
+        `${COMMANDS_DOC}: slash-command row ${i + 1} is not "| \`/name\` | text |": ${line}`,
+      );
     if (UNSAFE_PLAIN_YAML.test(m[2])) {
       throw new Error(
         `${COMMANDS_DOC}: slash-command row ${i + 1} text is not a plain YAML value ` +
@@ -290,7 +342,8 @@ export function slashCommands(markdown, skillNames) {
         (missingRows.length ? `; skill without a row: ${missingRows.join(", ")}` : ""),
     );
   }
-  if (rows.length !== rowNames.size) throw new Error(`${COMMANDS_DOC} slash-command table repeats a command`);
+  if (rows.length !== rowNames.size)
+    throw new Error(`${COMMANDS_DOC} slash-command table repeats a command`);
   return rows;
 }
 
@@ -314,7 +367,21 @@ export function promptStub({ name, menu }, runtime, { preamble } = {}) {
 // stamp (splice the rendered lines in) and the stray-slug scan (skip the
 // lines it owns), so the two can never disagree about where a region is.
 
+/** @typedef {(lines: readonly string[]) => [number, number] | null} RegionLocator */
+/**
+ * @typedef {object} GeneratorRegion
+ * @property {string} file
+ * @property {string} name
+ * @property {RegionLocator} locate
+ * @property {string} [appendHeading]
+ * @property {() => string[]} render
+ */
+
 // The body of a "## <title>" section: everything up to the next "## " heading or EOF.
+/**
+ * @param {string} title
+ * @returns {RegionLocator}
+ */
 export const section = (title) => (lines) => {
   const start = lines.indexOf(`## ${title}`);
   if (start === -1) return null;
@@ -326,6 +393,11 @@ export const section = (title) => (lines) => {
 // The inside of the first ```<lang> fence after the `### N. <title>` step
 // heading. The ordinal is not part of the anchor, so inserting a step above it
 // does not move the region.
+/**
+ * @param {string} title
+ * @param {string} lang
+ * @returns {RegionLocator}
+ */
 export const fenceUnder = (title, lang) => (lines) => {
   const heading = "### " + title;
   const step = lines.findIndex((l) => l.replace(/^### \d+\. /, "### ") === heading);
@@ -338,6 +410,11 @@ export const fenceUnder = (title, lang) => (lines) => {
 
 // The rows under a markdown table header (header line, separator, then every
 // consecutive line starting with rowPrefix).
+/**
+ * @param {string} header
+ * @param {string} rowPrefix
+ * @returns {RegionLocator}
+ */
 export const tableRows = (header, rowPrefix) => (lines) => {
   const start = lines.indexOf(header);
   if (start === -1) return null;
@@ -347,6 +424,11 @@ export const tableRows = (header, rowPrefix) => (lines) => {
 };
 
 // The lines strictly between the line `open` and the next line `close`.
+/**
+ * @param {string} open
+ * @param {string} close
+ * @returns {RegionLocator}
+ */
 export const between = (open, close) => (lines) => {
   const start = lines.indexOf(open);
   if (start === -1) return null;
@@ -355,19 +437,27 @@ export const between = (open, close) => (lines) => {
 };
 
 // The one line that starts with `prefix`.
+/**
+ * @param {string} prefix
+ * @returns {RegionLocator}
+ */
 export const lineStartingWith = (prefix) => (lines) => {
   const at = lines.findIndex((l) => l.startsWith(prefix));
   return at === -1 ? null : [at, at + 1];
 };
 
+/** @param {string} body */
 const blankPadded = (body) => ["", ...body.split("\n"), ""];
 
-const SHEET_ROLES_OPEN = "  # Stamped from plugins/pstack/models.json; edit there and rerun tools/generate.mjs.";
+const SHEET_ROLES_OPEN =
+  "  # Stamped from plugins/pstack/models.json; edit there and rerun tools/generate.mjs.";
 const ROLE_SKILLS_LINE = "Skills that dispatch on role models:";
 
 // awk string literals: models.json role labels and effort levels hold no quote
 // or backslash, which parseModels does not check, so check here.
+/** @param {import("./model-policy.mjs").ResolvedModels} models */
 function sheetRoles(models) {
+  /** @param {string} s */
   const quote = (s) => {
     if (/["\\]/.test(s)) throw new Error(`models.json: "${s}" cannot go in an awk string`);
     return `"${s}"`;
@@ -379,21 +469,33 @@ function sheetRoles(models) {
   ];
 }
 
+/**
+ * @param {import("./model-policy.mjs").ResolvedModels} models
+ * @param {string} label
+ */
 function requiredRole(models, label) {
   const role = models.roles.find((r) => r.role === label);
-  if (!role) throw new Error(`models.json: no "${label}" role, which a stamped region renders from`);
+  if (!role)
+    throw new Error(`models.json: no "${label}" role, which a stamped region renders from`);
   return role;
 }
 
 // Every generator-owned region: the file it lives in (repo-relative), how to
 // find it, and what it renders from the model policy. Adding a stamped region
 // means adding a row here; the stray-slug scan exempts exactly these spans.
+/**
+ * @param {import("./model-policy.mjs").ResolvedModels} models
+ * @returns {GeneratorRegion[]}
+ */
 export function regions(models) {
+  /** @param {string} skill */
   const skillFile = (skill) => `plugins/pstack/skills/${skill}/SKILL.md`;
+  /** @type {Map<string, import("./model-policy.mjs").ResolvedRole[]>} */
   const rolesBySkill = new Map();
   for (const r of models.roles) {
-    if (!rolesBySkill.has(r.skill)) rolesBySkill.set(r.skill, []);
-    rolesBySkill.get(r.skill).push(r);
+    const roles = rolesBySkill.get(r.skill);
+    if (roles) roles.push(r);
+    else rolesBySkill.set(r.skill, [r]);
   }
   const reviewers = requiredRole(models, "interrogate reviewers").models;
   return [
@@ -410,7 +512,8 @@ export function regions(models) {
       file: skillFile("interrogate"),
       name: "reviewer table",
       locate: tableRows("| Subagent | Default model |", "| Reviewer "),
-      render: () => reviewers.map((m, i) => `| Reviewer ${String.fromCodePoint(65 + i)} | ${code(m)} |`),
+      render: () =>
+        reviewers.map((m, i) => `| Reviewer ${String.fromCodePoint(65 + i)} | ${code(m)} |`),
     },
     ...[...rolesBySkill].map(([skill]) => ({
       file: skillFile(skill),
@@ -452,7 +555,13 @@ export function regions(models) {
           ["Default", "default"],
           ["Strongest", "strongest"],
           ["Panel", "panel"],
-        ].map(([label, tier]) => `| ${label} | ${models.roles.filter((r) => r.tier === tier).map((r) => code(r.role)).join(", ")} |`),
+        ].map(
+          ([label, tier]) =>
+            `| ${label} | ${models.roles
+              .filter((r) => r.tier === tier)
+              .map((r) => code(r.role))
+              .join(", ")} |`,
+        ),
     },
     {
       file: `${PLUGIN}/hooks/session-start-copilot.md`,
@@ -464,18 +573,32 @@ export function regions(models) {
 }
 
 const PREAMBLE_RUNTIMES = RUNTIMES.filter((runtime) => runtime.preamble);
-const DRIVER_LINE = "Resolve the driver skill through [poteto-mode's Non-negotiables](../SKILL.md#non-negotiables).";
-const DRIVER_PLAYBOOKS = ["autopilot-full", "multi-phase-plan", "orchestrate", "refactoring", "shipping"];
+const DRIVER_LINE =
+  "Resolve the driver skill through [poteto-mode's Non-negotiables](../SKILL.md#non-negotiables).";
+const DRIVER_PLAYBOOKS = [
+  "autopilot-full",
+  "multi-phase-plan",
+  "orchestrate",
+  "refactoring",
+  "shipping",
+];
 const LEAD_LINES = [...PREAMBLE_RUNTIMES.map((runtime) => runtime.preamble), DRIVER_LINE];
 
 // The skills with a row in a runtime mapping's Per-skill notes table, in row order.
+/**
+ * @param {Pick<(typeof RUNTIMES)[number], "notesHeader" | "tools">} runtime
+ * @param {string} markdown
+ */
 export function noteSkills(runtime, markdown) {
   const lines = markdown.split("\n");
   const range = tableRows(runtime.notesHeader, "| ")(lines);
   if (!range) throw new Error(`${runtime.tools}: "${runtime.notesHeader}" table header not found`);
   return lines.slice(...range).map((row) => {
     const skill = row.match(/^\| `([a-z0-9-]+)` \|/)?.[1];
-    if (!skill) throw new Error(`${runtime.tools}: Per-skill notes row does not start with a backticked skill: ${row}`);
+    if (!skill)
+      throw new Error(
+        `${runtime.tools}: Per-skill notes row does not start with a backticked skill: ${row}`,
+      );
     return skill;
   });
 }
@@ -487,22 +610,33 @@ export function noteSkills(runtime, markdown) {
 // the runtime it `displaces`. Every runtime's table must name real skills,
 // whether or not it stamps a preamble.
 export function loadLeadLines(root = repo) {
+  /** @type {Map<string, string[]>} */
   const leads = new Map();
   for (const runtime of RUNTIMES) {
     for (const skill of noteSkills(runtime, readFileSync(join(root, runtime.tools), "utf8"))) {
       const file = `${SKILLS}/${skill}/SKILL.md`;
-      if (!existsSync(join(root, file))) throw new Error(`${runtime.tools}: per-skill note for "${skill}", which has no SKILL.md`);
+      if (!existsSync(join(root, file)))
+        throw new Error(`${runtime.tools}: per-skill note for "${skill}", which has no SKILL.md`);
       const displaced = RUNTIMES.find((r) => r.name === runtime.displaces)?.preamble;
-      if (runtime.preamble) leads.set(file, [...(leads.get(file) ?? []).filter((line) => line !== displaced), runtime.preamble]);
+      if (runtime.preamble)
+        leads.set(file, [
+          ...(leads.get(file) ?? []).filter((line) => line !== displaced),
+          runtime.preamble,
+        ]);
     }
   }
-  for (const playbook of DRIVER_PLAYBOOKS) leads.set(`${SKILLS}/poteto-mode/playbooks/${playbook}.md`, [DRIVER_LINE]);
+  for (const playbook of DRIVER_PLAYBOOKS)
+    leads.set(`${SKILLS}/poteto-mode/playbooks/${playbook}.md`, [DRIVER_LINE]);
   return leads;
 }
 
 // Put each lead line in its own paragraph under the first heading after the
 // frontmatter, in order, dropping any other generator-owned lead line. Null
 // when there is no heading.
+/**
+ * @param {string} text
+ * @param {string | readonly string[]} lead
+ */
 export function stampLeadLine(text, lead) {
   const leads = [lead].flat();
   const lines = text.split("\n");
@@ -517,12 +651,24 @@ export function stampLeadLine(text, lead) {
     else if (rest.at(-1) === "" && !below[i + 1]) rest.pop();
   });
   if (rest[0]) rest.unshift("");
-  return [...lines.slice(0, heading + 1), ...leads.flatMap((line) => ["", line]), ...rest].join("\n");
+  return [...lines.slice(0, heading + 1), ...leads.flatMap((line) => ["", line]), ...rest].join(
+    "\n",
+  );
 }
 
 // Stamp every region the generator owns in `file` (repo-relative). A missing
 // anchor throws: a stamped region is a structural contract with the file, not
 // an optional nicety. With strict: false a missing anchor is left alone.
+/**
+ * @typedef {object} RegionOptions
+ * @property {boolean} [strict]
+ */
+/**
+ * @param {string} file
+ * @param {string} text
+ * @param {import("./model-policy.mjs").ResolvedModels} models
+ * @param {RegionOptions} [options]
+ */
 export function applyRegions(file, text, models, { strict = true } = {}) {
   const lines = text.split("\n");
   for (const region of regions(models).filter((r) => r.file === file)) {
@@ -547,7 +693,7 @@ export function resolveModels(models) {
   return {
     ...models,
     roles: models.roles.map((r) =>
-      typeof r.models === "string" ? { ...r, tier: r.models, models: [models.tiers[r.models]].flat() } : r,
+      usesTier(r) ? { ...r, tier: r.models, models: [models.tiers[r.models]].flat() } : r,
     ),
   };
 }
@@ -572,14 +718,19 @@ export function parseModels(raw, skillExists) {
   };
   const isObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
   if (!isObject(raw)) fail("must be an object");
-  for (const key of ["available", "efforts", "roles"]) if (!Array.isArray(raw[key])) fail(`"${key}" must be a list`);
-  for (const key of ["tiers", ...RUNTIMES.filter((runtime) => runtime.key).map((runtime) => runtime.key)]) {
+  for (const key of ["available", "efforts", "roles"])
+    if (!Array.isArray(raw[key])) fail(`"${key}" must be a list`);
+  for (const key of [
+    "tiers",
+    ...RUNTIMES.filter((runtime) => runtime.key).map((runtime) => runtime.key),
+  ]) {
     if (!isObject(raw[key])) fail(`"${key}" must be an object`);
   }
   const available = new Set(raw.available);
   unique(raw.available, "available");
   for (const tier of TIERS) {
-    if (!Object.hasOwn(raw.tiers, tier)) fail(`tiers has no "${tier}", which a stamped region renders from`);
+    if (!Object.hasOwn(raw.tiers, tier))
+      fail(`tiers has no "${tier}", which a stamped region renders from`);
   }
   for (const [index, slug] of raw.available.entries()) {
     if (typeof slug !== "string") fail(`available[${index}] must be a string`);
@@ -600,7 +751,8 @@ export function parseModels(raw, skillExists) {
     if (labels.has(role.role)) fail(`role "${role.role}" appears twice`);
     labels.add(role.role);
     if (typeof role.skill !== "string") fail(`roles[${index}].skill must be a string`);
-    if (!skillExists(role.skill)) fail(`role "${role.role}" names skill "${role.skill}", which has no SKILL.md`);
+    if (!skillExists(role.skill))
+      fail(`role "${role.role}" names skill "${role.skill}", which has no SKILL.md`);
     if (typeof role.models === "string") {
       if (!Object.hasOwn(raw.tiers, role.models)) {
         fail(`role "${role.role}" names tier "${role.models}", which tiers does not define`);
@@ -611,19 +763,22 @@ export function parseModels(raw, skillExists) {
       fail(`role "${role.role}" needs a tier name or a non-empty list of models`);
     }
     for (const slug of role.models) {
-      if (!available.has(slug)) fail(`role "${role.role}" names "${slug}", which is not in available`);
+      if (!available.has(slug))
+        fail(`role "${role.role}" names "${slug}", which is not in available`);
     }
     const tier = tierLists.get(role.models.join());
     if (tier) fail(`role "${role.role}" lists tier "${tier}" literally; name the tier`);
   }
   unique(raw.efforts, "efforts");
   for (const level of raw.efforts) {
-    if (!EFFORT_LEVELS.includes(level)) fail(`effort "${level}" is not one of ${EFFORT_LEVELS.join(", ")}`);
+    if (!EFFORT_LEVELS.includes(level))
+      fail(`effort "${level}" is not one of ${EFFORT_LEVELS.join(", ")}`);
   }
   if (!raw.efforts.includes(raw.defaultEffort) && raw.defaultEffort !== "session") {
     fail(`defaultEffort "${raw.defaultEffort}" is not an effort level or "session"`);
   }
-  for (const runtime of RUNTIMES) runtime.checkModels?.(raw[runtime.key], { raw, fail, unique, isObject });
+  for (const runtime of RUNTIMES)
+    runtime.checkModels?.(raw[runtime.key], { raw, fail, unique, isObject });
   if (!isModelPolicy(raw)) fail("has invalid field types");
   return resolveModels(raw);
 }
@@ -645,6 +800,10 @@ const CURSOR_ONLY_KEYS = /^(?:mode|icon|color|reminder|is_background):/;
 // disable-model-invocation: true on every skill; the port drops it on public
 // skills and swaps it for user-invocable: false on principle leaves (CHANGES
 // 0.9.8, 0.9.9).
+/**
+ * @param {string} file
+ * @param {string} text
+ */
 function portFrontmatter(file, text) {
   const skill = file.match(/^plugins\/pstack\/skills\/([^/]+)\/SKILL\.md$/)?.[1];
   const name = skill ?? file.match(/^plugins\/pstack\/agents\/([^/]+)\.md$/)?.[1];
@@ -668,19 +827,26 @@ function portFrontmatter(file, text) {
 // upstream has none, which is where every hand-added one already sits. A
 // region whose anchor upstream lacks is left unstamped, so the file surfaces
 // as forked or conflicted instead of aborting the sync.
+/**
+ * @param {string} file
+ * @param {string} text
+ * @param {import("./model-policy.mjs").ResolvedModels} models
+ * @param {ReadonlyMap<string, readonly string[]>} leads
+ */
 export function deriveSkill(file, text, models, leads) {
   const front = portFrontmatter(file, text);
   const line = leads.get(file);
   const out = (line && stampLeadLine(front, line)) || front;
   const lines = out.split("\n");
-  for (const region of regions(models).filter((r) => r.file === file && r.appendHeading)) {
-    if (region.locate(lines)) continue;
+  for (const region of regions(models)) {
+    if (region.file !== file || !region.appendHeading || region.locate(lines)) continue;
     if (lines.at(-1) !== "") lines.push("");
     lines.push(region.appendHeading, "");
   }
   return applyRegions(file, lines.join("\n"), models, { strict: false });
 }
 
+/** @param {readonly import("./model-policy.mjs").ResolvedRole[]} roles */
 export function modelsSection(roles) {
   const bullets = roles.map((r) => `- ${r.role}: ${codeList(r.models)}`).join("\n");
   return (
@@ -694,17 +860,23 @@ export function modelsSection(roles) {
 // no per-call effort parameter, but a subagent definition's `effort` frontmatter
 // overrides the session's effort, so each level ships as an agent the role is
 // dispatched through, with the model still passed on the call.
+/**
+ * @param {readonly string[]} levels
+ * @param {string} defaultEffort
+ */
 export function effortSection(levels, defaultEffort) {
   return (
     "A role value in the override sheet may name a reasoning effort after its model, as in `opus @xhigh`. " +
-    "Levels on Claude Code: " + codeList(levels) + ". Which ones apply depends on the model. " +
+    "Levels on Claude Code: " +
+    codeList(levels) +
+    ". Which ones apply depends on the model. " +
     "A value without `@` takes the sheet's `default effort` line, a level or `session`, " +
     `and ${code(defaultEffort)} when the sheet has no such line. \`session\` sets no effort, so the dispatch ` +
     "is the usual one. Strip the suffix before reading the model: `inherit-parent` or `auto` still omits `model` " +
     "at every level, and a model name is passed as `model`. " +
     "On Claude Code, a level picks the effort agent from the `subagent_type` you would otherwise use. " +
-    "`pstack:poteto-agent` becomes `subagent_type: \"pstack:poteto-agent-<level>\"`. " +
-    "`general-purpose`, or no `subagent_type`, becomes `subagent_type: \"pstack:effort-<level>\"`. " +
+    '`pstack:poteto-agent` becomes `subagent_type: "pstack:poteto-agent-<level>"`. ' +
+    '`general-purpose`, or no `subagent_type`, becomes `subagent_type: "pstack:effort-<level>"`. ' +
     "The effort agents set only `effort`, so the model you pass still decides the model. " +
     "On Codex, pass the level as `spawn_agent`'s `reasoning_effort` and keep the usual instructions."
   );
@@ -715,6 +887,10 @@ export function effortSection(levels, defaultEffort) {
 // pstack:poteto-agent instead of copying its routing contract, so only the
 // base agent reads as the delegate /poteto-mode runs spawn. A description is
 // written unquoted, so it must not open with a backtick: strict YAML rejects it.
+/**
+ * @param {readonly string[]} levels
+ * @param {string} potetoAgent
+ */
 export function effortAgents(levels, potetoAgent) {
   const { body } = parseFrontmatter(potetoAgent);
   return levels.flatMap((level) => [
@@ -733,7 +909,8 @@ export function effortAgents(levels, potetoAgent) {
       text:
         `---\nname: poteto-agent-${level}\ndescription: Runs \`pstack:poteto-agent\` at ${level} reasoning effort. ` +
         `Dispatched in place of \`pstack:poteto-agent\` when a pstack role's override names \`@${level}\`. The caller passes the model.\n` +
-        `effort: ${level}\n---\n` + body,
+        `effort: ${level}\n---\n` +
+        body,
     },
   ]);
 }
@@ -758,16 +935,24 @@ export function validateAgentFrontmatter(pluginRoot) {
   const failures = pluginAgentPaths(pluginRoot).flatMap((path) => {
     try {
       const { data } = parseFrontmatter(readFileSync(join(pluginRoot, path), "utf8"));
-      if (!data?.name || !data?.description) return [`${path}: frontmatter needs a name and a description`];
+      if (!data?.name || !data?.description)
+        return [`${path}: frontmatter needs a name and a description`];
       const file = basename(path, ".md");
-      return data.name === file ? [] : [`${path}: frontmatter name "${data.name}" != file name "${file}"`];
+      return data.name === file
+        ? []
+        : [`${path}: frontmatter name "${data.name}" != file name "${file}"`];
     } catch (err) {
       return [`${path}: ${err.message}`];
     }
   });
-  if (failures.length) throw new Error(`agent frontmatter is not readable YAML:\n${failures.join("\n")}`);
+  if (failures.length)
+    throw new Error(`agent frontmatter is not readable YAML:\n${failures.join("\n")}`);
 }
 
+/**
+ * @param {string} manifestText
+ * @param {readonly string[]} paths
+ */
 export function stampAgentPaths(manifestText, paths) {
   return JSON.stringify({ ...JSON.parse(manifestText), agents: paths }, null, 2) + "\n";
 }
@@ -785,6 +970,7 @@ export function setupModelsSection(models) {
 
 // The override sheet the setup skill writes for users. The preamble is fixed;
 // the role rows come from models.json.
+/** @param {import("./model-policy.mjs").ResolvedModels} models */
 export function overrideSheetBlock(models) {
   const rows = models.roles.map((r) => `${r.role}: ${r.models.join(", ")}`).join("\n");
   return (
@@ -793,7 +979,9 @@ export function overrideSheetBlock(models) {
     "the values here override those defaults. Delete a line to fall back to the skill default. " +
     "A value of `inherit-parent` or `auto` runs that role on the parent session's model (the `Agent` call omits `model`); " +
     "an alias entry in a panel list still counts toward that panel's fan-out. " +
-    "A model may carry a reasoning effort, as in `opus @xhigh` (levels: " + models.efforts.join(", ") + "); " +
+    "A model may carry a reasoning effort, as in `opus @xhigh` (levels: " +
+    models.efforts.join(", ") +
+    "); " +
     "the role then runs through the pstack effort agent of that level, each entry of a panel list on its own. " +
     "`default effort` sets the level for a value without one; `session` keeps the parent session's effort. " +
     "`session hook: off` stops the Claude Code or Codex SessionStart hook, or the pstack Pi extension, from injecting the poteto-mode mandate; " +
@@ -806,6 +994,11 @@ export function overrideSheetBlock(models) {
 // After stamping, skill prose outside the regions the generator owns may name
 // no model: a full claude-* ID is rejected by the Agent tool, and a backticked
 // family name hard-codes a default that belongs in models.json.
+/**
+ * @param {string} file
+ * @param {string} text
+ * @param {import("./model-policy.mjs").ResolvedModels} models
+ */
 export function strayModelSlugs(file, text, models) {
   const families = models.available.join("|");
   // Version numbers may sit between claude- and the family (claude-3-opus,
@@ -816,7 +1009,7 @@ export function strayModelSlugs(file, text, models) {
   const owned = regions(models)
     .filter((r) => r.file === file)
     .map((r) => r.locate(lines))
-    .filter(Boolean);
+    .filter((range) => range !== null);
   const strays = [];
   lines.forEach((line, i) => {
     if (!SLUG_RE.test(line)) return;
@@ -837,7 +1030,10 @@ const HOOK_FIELDS = {
   once: Type.Optional(Type.Boolean()),
 };
 const hookType = (type, fields) =>
-  Type.Object({ type: Type.Literal(type), ...fields, ...HOOK_FIELDS }, { additionalProperties: false });
+  Type.Object(
+    { type: Type.Literal(type), ...fields, ...HOOK_FIELDS },
+    { additionalProperties: false },
+  );
 const HOOK_TYPES = {
   command: hookType("command", {
     command: Type.String(),
@@ -861,7 +1057,10 @@ const HOOK_TYPES = {
   agent: hookType("agent", { prompt: Type.String(), model: Type.Optional(Type.String()) }),
 };
 const MATCHER_GROUP = Type.Object(
-  { matcher: Type.Optional(Type.String()), hooks: Type.Array(Type.Object({ type: Type.String() })) },
+  {
+    matcher: Type.Optional(Type.String()),
+    hooks: Type.Array(Type.Object({ type: Type.String() })),
+  },
   { additionalProperties: false },
 );
 const HOOKS_FILE = Type.Object({ hooks: Type.Record(Type.String(), Type.Array(MATCHER_GROUP)) });
@@ -883,7 +1082,10 @@ function schemaFaults(schema, value, subject) {
 // directly must be executable, or the SessionStart hook fails silently for
 // every user.
 // The root is the variable the runtime exports with the plugin's directory.
-export function validateHooks(hooksJson, { statOf, file = "hooks/hooks.json", root = "CLAUDE_PLUGIN_ROOT" }) {
+export function validateHooks(
+  hooksJson,
+  { statOf, file = "hooks/hooks.json", root = "CLAUDE_PLUGIN_ROOT" },
+) {
   const raw = JSON.parse(hooksJson);
   const faults = schemaFaults(HOOKS_FILE, raw, "file");
   if (faults.length) throw new Error(`${file}:\n  ${faults.join("\n  ")}`);
@@ -891,7 +1093,9 @@ export function validateHooks(hooksJson, { statOf, file = "hooks/hooks.json", ro
     for (const hook of groups.flatMap((group) => group.hooks)) {
       const schema = Object.hasOwn(HOOK_TYPES, hook.type) ? HOOK_TYPES[hook.type] : undefined;
       if (!schema) {
-        faults.push(`${event}: hook type "${hook.type}" is not one of ${Object.keys(HOOK_TYPES).join(", ")}`);
+        faults.push(
+          `${event}: hook type "${hook.type}" is not one of ${Object.keys(HOOK_TYPES).join(", ")}`,
+        );
         continue;
       }
       const hookFaults = schemaFaults(schema, hook, "hook");
@@ -900,8 +1104,12 @@ export function validateHooks(hooksJson, { statOf, file = "hooks/hooks.json", ro
         continue;
       }
       if (hook.type !== "command") continue;
-      for (const command of [hook.command, hook.commandWindows].filter((value) => value !== undefined)) {
-        const refs = [...command.matchAll(new RegExp(`\\$\\{${root}\\}/([^"\\s]+)`, "g"))].map((m) => m[1]);
+      for (const command of [hook.command, hook.commandWindows].filter(
+        (value) => value !== undefined,
+      )) {
+        const refs = [...command.matchAll(new RegExp(`\\$\\{${root}\\}/([^"\\s]+)`, "g"))].map(
+          (m) => m[1],
+        );
         if (!refs.length) {
           faults.push(`${event}: command does not reference \${${root}}: ${command}`);
           continue;
@@ -910,7 +1118,8 @@ export function validateHooks(hooksJson, { statOf, file = "hooks/hooks.json", ro
         refs.forEach((rel, i) => {
           const st = statOf(rel);
           if (!st) faults.push(`${event}: ${rel} does not exist in the plugin`);
-          else if (i === 0 && executed && !(st.mode & 0o111)) faults.push(`${event}: ${rel} is not executable`);
+          else if (i === 0 && executed && !(st.mode & 0o111))
+            faults.push(`${event}: ${rel} is not executable`);
         });
       }
     }
@@ -922,27 +1131,42 @@ export function validateHooks(hooksJson, { statOf, file = "hooks/hooks.json", ro
 // computed from the sources under `root` without writing. Any other entry in
 // an owned directory is an orphan. Throws when a source cannot be planned.
 // Without `models`, plan loads the model policy from `root` itself.
+/**
+ * @typedef {(text: string) => string} TextEdit
+ */
+/**
+ * @param {string} root
+ * @param {import("./model-policy.mjs").ResolvedModels} [models]
+ */
 export function plan(root, models) {
+  /** @param {string} rel */
   const read = (rel) => readFileSync(join(root, rel), "utf8");
   const version = read("VERSION").trim();
-  if (!/^\d+\.\d+\.\d+$/.test(version)) throw new Error(`VERSION must be MAJOR.MINOR.PATCH, got "${version}"`);
+  if (!/^\d+\.\d+\.\d+$/.test(version))
+    throw new Error(`VERSION must be MAJOR.MINOR.PATCH, got "${version}"`);
   assertChangesHeading(read("CHANGES.md"), version);
   models ??= loadModels(root);
 
   // A stamp edits the text planned so far for its path, so producers on one
   // path compose. A put writes a whole file, so it throws rather than replace
   // different text another producer planned.
+  /** @type {Record<string, string>} */
   const files = {};
+  /** @param {string} rel */
   const current = (rel) => files[rel] ?? read(rel);
+  /** @param {string} rel @param {TextEdit} edit */
   const stamp = (rel, edit) => {
     files[rel] = edit(current(rel));
   };
+  /** @param {string} rel @param {string} text */
   const put = (rel, text) => {
-    if (Object.hasOwn(files, rel) && files[rel] !== text) throw new Error(`${rel} is planned twice with different text`);
+    if (Object.hasOwn(files, rel) && files[rel] !== text)
+      throw new Error(`${rel} is planned twice with different text`);
     files[rel] = text;
   };
   for (const file of VERSIONED_MANIFESTS) stamp(file, (text) => stampVersion(text, version, file));
-  for (const file of new Set(regions(models).map((r) => r.file))) stamp(file, (text) => applyRegions(file, text, models));
+  for (const file of new Set(regions(models).map((r) => r.file)))
+    stamp(file, (text) => applyRegions(file, text, models));
   const leads = loadLeadLines(root);
   for (const [file, line] of leads) {
     stamp(file, (text) => {
@@ -955,7 +1179,12 @@ export function plan(root, models) {
     for (const skill of slashCommands(read(COMMANDS_DOC), publicSkills(join(root, SKILLS)))) {
       // A preamble that displaces this runtime's stands in for it.
       const lines = leads.get(`${SKILLS}/${skill.name}/SKILL.md`) ?? [];
-      const preamble = RUNTIMES.some((r) => lines.includes(r.preamble) && (r === runtime || r.displaces === runtime.name));
+      const preamble = RUNTIMES.some(
+        (r) =>
+          r.preamble !== null &&
+          lines.includes(r.preamble) &&
+          (r === runtime || r.displaces === runtime.name),
+      );
       put(`${runtime.prompts}/${skill.name}.md`, promptStub(skill, runtime, { preamble }));
     }
   }
@@ -975,7 +1204,9 @@ export function plan(root, models) {
   for (const { source, target } of PORTABLE_ASSETS) {
     const path = `${SKILLS}/${target}`;
     if (!OWNED_DIRS.includes(dirname(path))) {
-      throw new Error(`${path} is not directly inside a generator-owned directory (${OWNED_DIRS.join(", ")})`);
+      throw new Error(
+        `${path} is not directly inside a generator-owned directory (${OWNED_DIRS.join(", ")})`,
+      );
     }
     if (!pathIsInside(realRoot, realpathSync(join(root, source)))) {
       throw new Error(`${source} resolves outside the repository through a symlink`);
@@ -992,7 +1223,8 @@ function lstatNoSymlinks(root, path) {
     at = join(at, part);
     st = lstatSync(at, { throwIfNoEntry: false });
     if (!st) return null;
-    if (st.isSymbolicLink()) throw new Error(`${relative(root, at)} is a symlink; the generator never writes through one`);
+    if (st.isSymbolicLink())
+      throw new Error(`${relative(root, at)} is a symlink; the generator never writes through one`);
   }
   return st;
 }
@@ -1001,15 +1233,18 @@ export function changes(root, intended) {
   const pending = [];
   for (const [path, text] of Object.entries(intended.files)) {
     const st = lstatNoSymlinks(root, path);
-    if (st && !st.isFile()) throw new Error(`${path} is not a regular file; the generator never overwrites one`);
-    if (!st || readFileSync(join(root, path), "utf8") !== text) pending.push({ kind: "write", path });
+    if (st && !st.isFile())
+      throw new Error(`${path} is not a regular file; the generator never overwrites one`);
+    if (!st || readFileSync(join(root, path), "utf8") !== text)
+      pending.push({ kind: "write", path });
   }
   const planned = Object.keys(intended.files);
   for (const dir of intended.ownedDirs) {
     if (!lstatNoSymlinks(root, dir)) continue;
     for (const entry of readdirSync(join(root, dir)).sort()) {
       const path = `${dir}/${entry}`;
-      if (!planned.some((p) => p === path || p.startsWith(`${path}/`))) pending.push({ kind: "remove", path });
+      if (!planned.some((p) => p === path || p.startsWith(`${path}/`)))
+        pending.push({ kind: "remove", path });
     }
   }
   return pending;
@@ -1046,23 +1281,27 @@ export function problems(root, models) {
   const skillsDir = join(root, SKILLS);
   const read = (rel) => readFileSync(join(root, rel), "utf8");
   const pathExists = (rel) => existsSync(join(root, rel));
-  const packages = RUNTIMES.filter((runtime) => runtime.manifest).map((runtime) =>
-    attempt(() => {
-      const text = read(runtime.manifest);
-      let manifest;
-      try {
-        manifest = JSON.parse(text);
-      } catch (err) {
-        throw new Error(`${runtime.manifest}: ${err.message}`);
-      }
-      if (typeof manifest !== "object" || !manifest) throw new Error(`${runtime.manifest}: not a JSON object`);
-      return { runtime, manifest, text };
-    }),
-  ).filter(Boolean);
+  const packages = RUNTIMES.filter((runtime) => runtime.manifest)
+    .map((runtime) =>
+      attempt(() => {
+        const text = read(runtime.manifest);
+        let manifest;
+        try {
+          manifest = JSON.parse(text);
+        } catch (err) {
+          throw new Error(`${runtime.manifest}: ${err.message}`);
+        }
+        if (typeof manifest !== "object" || !manifest)
+          throw new Error(`${runtime.manifest}: not a JSON object`);
+        return { runtime, manifest, text };
+      }),
+    )
+    .filter(Boolean);
   models ??= attempt(() => loadModels(root));
   const statOf = (rel) => {
     const full = join(pluginRoot, rel);
-    if (!existsSync(full) || !pathIsInside(realpathSync(pluginRoot), realpathSync(full))) return null;
+    if (!existsSync(full) || !pathIsInside(realpathSync(pluginRoot), realpathSync(full)))
+      return null;
     return statSync(full);
   };
   if (models) {
@@ -1085,7 +1324,9 @@ export function problems(root, models) {
       return readFileSync(full, "utf8")
         .split("\n")
         .flatMap((line, i) =>
-          LEAD_LINES.includes(line) && !(leads.get(file) ?? []).includes(line) ? [`${file}:${i + 1}`] : [],
+          LEAD_LINES.includes(line) && !(leads.get(file) ?? []).includes(line)
+            ? [`${file}:${i + 1}`]
+            : [],
         );
     });
     if (strays.length) {
@@ -1098,7 +1339,8 @@ export function problems(root, models) {
   });
   attempt(() => validateSkillsTree(skillsDir));
   attempt(() => validateProsePaths(skillsDir));
-  for (const packaged of packages) attempt(() => packaged.runtime.validate({ ...packaged, read, pathExists }));
+  for (const packaged of packages)
+    attempt(() => packaged.runtime.validate({ ...packaged, read, pathExists }));
   attempt(() => validatePluginLayout(pluginRoot));
   attempt(() => validateAgentFrontmatter(pluginRoot));
   const hooksFiles = [
@@ -1108,14 +1350,17 @@ export function problems(root, models) {
     ),
   ];
   for (const { file, root } of hooksFiles) {
-    attempt(() => validateHooks(readFileSync(join(pluginRoot, file), "utf8"), { statOf, file, root }));
+    attempt(() =>
+      validateHooks(readFileSync(join(pluginRoot, file), "utf8"), { statOf, file, root }),
+    );
   }
   return failures;
 }
 
 function main() {
   const args = process.argv.slice(2);
-  if (args.some((arg) => arg !== "--check")) throw new Error("usage: node tools/generate.mjs [--check]");
+  if (args.some((arg) => arg !== "--check"))
+    throw new Error("usage: node tools/generate.mjs [--check]");
   const check = args.includes("--check");
   const models = loadModels(repo);
   const intended = plan(repo, models);
@@ -1133,10 +1378,13 @@ function main() {
         pending.map(({ kind, path }) => `  ${kind}: ${path}`).join("\n"),
     );
   }
-  if (pending?.length === 0) console.log(`ok: ${Object.keys(intended.files).length} generated files current`);
+  if (pending?.length === 0)
+    console.log(`ok: ${Object.keys(intended.files).length} generated files current`);
   for (const failure of failures) console.error(`FAIL: ${failure}`);
   if (failures.length) process.exit(1);
-  console.log("ok: skill links, prose paths, model slugs, runtime packaging, plugin layout, agent frontmatter, and hooks pass their checks");
+  console.log(
+    "ok: skill links, prose paths, model slugs, runtime packaging, plugin layout, agent frontmatter, and hooks pass their checks",
+  );
 }
 
 // Guarded so importing the generator's validation and rendering functions does
