@@ -1,11 +1,12 @@
 // PiChild against small scripted children, for stream edge cases the fake pi
 // cannot produce.
-import { expect, test } from "vitest";
+import { assert, expect, test } from "vitest";
 
 import { PiChild } from "../../plugins/pstack/pi/child.ts";
 import { sleep } from "./harness.mjs";
 
 const opts = { cwd: process.cwd(), exitGraceMs: 1000 };
+/** @param {string} script */
 const scripted = (script) => new PiChild(process.execPath, ["-e", script], opts, "p");
 const commandLines = 'require("node:readline").createInterface({ input: process.stdin })';
 
@@ -30,12 +31,14 @@ test("a response whose success is not a boolean settles its command as failed in
   );
   await sleep(200);
   const response = await child.command({ type: "steer", message: "m" });
+  assert.exists(response);
   expect(response.success).toBe(false);
   child.close();
   await child.exited;
 });
 
 // Answers each command; a steer's response is `before` or `after` the settle, in one write.
+/** @param {"before" | "after"} order */
 const steerAndSettle = (order) =>
   `${commandLines}.on("close", () => process.exit(0)).on("line", (l) => { const c = JSON.parse(l); const r = JSON.stringify({ id: c.id, type: "response", command: c.type, success: true }) + "\\n";` +
   ` const s = JSON.stringify({ type: "agent_settled" }) + "\\n"; process.stdout.write(c.type === "steer" ? ${order === "before" ? "r + s" : "s + r"} : r); });`;

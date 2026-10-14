@@ -9,6 +9,10 @@ vi.setConfig({ testTimeout: 30_000 });
 
 const script = join(import.meta.dirname, "../plugins/pstack/skills/poteto-mode/scripts/check-playbooks.mjs");
 
+/**
+ * @param {Record<string, string> | null} playbooks
+ * @param {{ throughSymlink?: boolean, cwd?: string, args?: string[] }} [options]
+ */
 function run(playbooks, { throughSymlink = false, cwd = ".", args = ["."] } = {}) {
   // The script reports the resolved working directory; macOS tmpdir() sits behind the /var symlink.
   const root = realpathSync(mkdtempSync(join(tmpdir(), "pstack-check-playbooks-")));
@@ -43,7 +47,7 @@ describe("project playbooks", () => {
     const result = run({
       "bug-fix.md": '---\nextends: bug-fix\nwhen: Use it for any bug report.\n---\n- **After** "Ask the user to reproduce it": compare with main.\n',
       "ship.md": "---\nextends: shipping-v2\nwhen: Use it to ship.\n---\n",
-      "fix.md": "---\nextends: bug-fix\nwhen: Use it to fix.\n---\n- **After** \u201cBinary-search the cause\u201d: compare with main.\n",
+      "fix.md": "---\nextends: bug-fix\nwhen: Use it to fix.\n---\n- **After** \u201CBinary-search the cause\u201D: compare with main.\n",
     });
     expect(result.code).toBe(1);
     expect(result.out).toContain('.agents/playbooks/bug-fix.md: "Ask the user to reproduce it" is not in any playbook it extends');
@@ -133,7 +137,7 @@ describe("project playbooks", () => {
       const bundled = join(root, "bundled");
       mkdirSync(join(bundled, "sub"), { recursive: true });
       // On POSIX the second path is a file named `sub\x.md`. On Windows both paths are sub/x.md.
-      for (const file of ["sub/x.md", "sub\\x.md"]) writeFileSync(join(bundled, file), "");
+      for (const file of ["sub/x.md", String.raw`sub\x.md`]) writeFileSync(join(bundled, file), "");
       mkdirSync(join(root, ".agents/playbooks"), { recursive: true });
       writeFileSync(join(root, ".agents/playbooks/ship.md"), "---\nextends: sub/x, sub\\x\nwhen: Use it to ship.\n---\n");
       expect(checkPlaybooks(root, bundled)).toEqual([

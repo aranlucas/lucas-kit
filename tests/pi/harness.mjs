@@ -23,6 +23,10 @@ import { writeSheet } from "../session-hook-sheets.mjs";
 /** @typedef {ReturnType<typeof world>} World */
 /** @typedef {ReturnType<typeof fakePi>} FakePi */
 /** @typedef {ReturnType<typeof fakeCtx>} FakeCtx */
+/**
+ * The command record constructed by registerSchedule's /loop registration.
+ * @typedef {{ description: string, handler: (args: string, ctx: FakeCtx) => Promise<void> }} FixtureCommand
+ */
 /** @typedef {import("../session-hook-sheets.mjs").SheetInput} SheetInput */
 /** @typedef {{ script?: unknown, sheet?: SheetInput }} WorldOptions */
 /** @typedef {{ signal?: AbortSignal }} DialogOptions */
@@ -82,6 +86,7 @@ const fixtureModels = {
 
 export function fakePi() {
   const tools = new Map();
+  /** @type {Map<string, FixtureCommand>} */
   const commands = new Map();
   const handlers = new Map();
   /** @type {{ message: PstackNotice, options: NoticeOptions }[]} */
@@ -92,7 +97,9 @@ export function fakePi() {
   const entries = [];
   const api = {
     registerTool: (tool) => tools.set(tool.name, tool),
+    /** @param {string} name @param {FixtureCommand} options */
     registerCommand: (name, options) => commands.set(name, options),
+    /** @returns {{ name: string, source: "extension" }[]} */
     getCommands: () => [...commands.keys()].map((name) => ({ name, source: "extension" })),
     on(event, handler) {
       handlers.set(event, [...(handlers.get(event) ?? []), handler]);
