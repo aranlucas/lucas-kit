@@ -1,6 +1,6 @@
 # Pi equivalence
 
-This table lists every Claude Code mechanism the pstack plugin depends on, found by scanning `plugins/pstack/` for tool names, agent fields, hooks, paths, bundled skills, CLIs, and model names. Each row says how Pi 1.1 provides the same behavior and what proves it. `tests/pi-equivalence.test.mjs` fails when a row lacks a valid status, when an `extension` or `script` row names a test that does not exist, or when a `difference` row gives no reason.
+This table lists every Claude Code mechanism the pstack plugin depends on, found by scanning `plugins/pstack/` for tool names, agent fields, hooks, paths, bundled skills, CLIs, and model names. Each row says how Pi 1.1 provides the same behavior and what proves it. `test/pi-equivalence.test.mjs` fails when a row lacks a valid status, when an `extension` or `script` row names a test that does not exist, or when a `difference` row gives no reason.
 
 Statuses:
 
@@ -11,7 +11,7 @@ Statuses:
 - `difference`: Pi behaves differently, and the reason column says why no skill depends on it for a correct result.
 - `n/a`: the plugin mentions it but no behavior depends on it.
 
-The Live column records the end-to-end run on real Pi with `PSTACK_PI_LIVE=1` (`tests/pi/live.test.mjs`). A Live value of `n/a` means the live run did not exercise that row. The machine that ran it had only a ChatGPT sign-in on the `openai` provider, so the family names resolved through the shipped `openai` table (X01b). The `anthropic/*` IDs (X01a) and the `openai-codex/*` IDs (X01c) were never called live; `tests/pi/catalog.test.mjs` checks both tables against the model catalog of the installed Pi.
+The Live column records the end-to-end run on real Pi with `PSTACK_PI_LIVE=1` (`test/pi/live.test.mjs`). A Live value of `n/a` means the live run did not exercise that row. The machine that ran it had only a ChatGPT sign-in on the `openai` provider, so the family names resolved through the shipped `openai` table (X01b). The `anthropic/*` IDs (X01a) and the `openai-codex/*` IDs (X01c) were never called live; `test/pi/catalog.test.mjs` checks both tables against the model catalog of the installed Pi.
 
 | ID | Claude Code mechanism | On Pi | Status | Evidence | Live |
 | --- | --- | --- | --- | --- | --- |

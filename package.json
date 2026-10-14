@@ -36,7 +36,7 @@
     "generate:check": "node tools/generate.mjs --check",
     "sync": "node tools/sync.mjs",
     "test": "vitest run",
-    "test:pnpm": "vitest run tests/pnpm-skills.test.mjs",
+    "test:pnpm": "vitest run test/pnpm-skills.test.mjs",
     "typecheck:pi": "node tools/typecheck-pi.mjs",
     "lint": "oxlint",
     "lint:fix": "oxlint --fix",

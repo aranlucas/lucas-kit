@@ -11,7 +11,7 @@
 // (`sleep $N`), and a poll loop of sleeps under two seconds. Known over-blocks:
 // a sleep inside a backgrounded group (`(sleep 30; echo done) &`), a
 // backgrounded sleep with a redirection before the `&`, and
-// `timeout 5 sleep 30`. tests/pi/sleep-wait.test.mjs lists each, so changing
+// `timeout 5 sleep 30`. test/pi/sleep-wait.test.mjs lists each, so changing
 // one is a visible decision.
 const MIN_WAIT_S = 2;
 const SLEEP_UNITS = { "": 1, s: 1, m: 60, h: 3600, d: 86400 };
