@@ -193,6 +193,16 @@ export function parseFrontmatter(text) {
 // Validate the shared subset of the Agent Skills contract before deriving any
 // runtime-specific views. Runtime-only frontmatter keys may be ignored by other
 // consumers, but every skill needs a portable name and description.
+/**
+ * @typedef {object} SkillMetadata
+ * @property {string} name
+ * @property {string} description
+ * @property {boolean} userInvocable
+ */
+/**
+ * @param {string} skillsDir
+ * @returns {SkillMetadata[]}
+ */
 export function agentSkills(skillsDir) {
   const skills = [];
   for (const entry of readdirSync(skillsDir).sort()) {
@@ -202,7 +212,7 @@ export function agentSkills(skillsDir) {
     const name = front.name;
     if (name !== entry)
       throw new Error(`${path}: frontmatter name "${name}" != directory "${entry}"`);
-    if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(name) || name.length > 64) {
+    if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(entry) || entry.length > 64) {
       throw new Error(`${path}: frontmatter name "${name}" is not a portable Agent Skills name`);
     }
     const description = front.description;
@@ -225,15 +235,16 @@ export function agentSkills(skillsDir) {
     const userInvocable = front["user-invocable"] !== false;
     // CHANGES 0.9.9: principle leaves are read by path from poteto-mode and
     // stay out of the slash menu.
-    if (name.startsWith("principle-") && userInvocable) {
+    if (entry.startsWith("principle-") && userInvocable) {
       throw new Error(`${path}: principle leaves carry user-invocable: false (CHANGES 0.9.9)`);
     }
-    skills.push({ name, description, userInvocable });
+    skills.push({ name: entry, description, userInvocable });
   }
   return skills;
 }
 
 // Layout invariants that live outside any one skill.
+/** @param {string} pluginRoot */
 export function validatePluginLayout(pluginRoot) {
   // CHANGES 0.9.13 (#22): Claude Code lists a plugin's commands and its
   // user-invocable skills in the slash menu, so a command trampoline beside a
@@ -297,6 +308,7 @@ export function validatePluginLayout(pluginRoot) {
 
 // A public skill is any Agent Skill not marked user-invocable: false (the
 // principle-* leaves). Each has a row in the reference slash-command table.
+/** @param {string} skillsDir */
 export function publicSkills(skillsDir) {
   return agentSkills(skillsDir)
     .filter((skill) => skill.userInvocable)
@@ -313,6 +325,16 @@ const UNSAFE_PLAIN_YAML = /:\s|:$|\s#|^(?:[,[\]{}#&*!|>'"%@`]|[-?:](?:\s|$))/;
 // The reference table is the source of the Codex slash-menu one-liners and their
 // order. Returns [{ name, menu }] in row order; throws when the row set and the
 // public skills disagree, naming each side's leftovers.
+/**
+ * @typedef {object} SlashCommand
+ * @property {string} name
+ * @property {string} menu
+ */
+/**
+ * @param {string} markdown
+ * @param {readonly string[]} skillNames
+ * @returns {SlashCommand[]}
+ */
 export function slashCommands(markdown, skillNames) {
   const lines = markdown.split("\n");
   const range = tableRows(COMMAND_TABLE_HEADER, "|")(lines);
@@ -351,6 +373,15 @@ export function slashCommands(markdown, skillNames) {
 // link to the platform mapping so native invocation and skills-only installs
 // do not depend on these stubs. A skill with the runtime's stamped preamble
 // already sends the reader to the mapping, so its stub does not say it again.
+/**
+ * @typedef {object} PromptOptions
+ * @property {boolean} [preamble]
+ */
+/**
+ * @param {SlashCommand} command
+ * @param {Pick<(typeof RUNTIMES)[number], "mapping">} runtime
+ * @param {PromptOptions} [options]
+ */
 export function promptStub({ name, menu }, runtime, { preamble } = {}) {
   const pointer = preamble
     ? ""
@@ -918,6 +949,7 @@ export function effortAgents(levels, potetoAgent) {
 const AGENT_DIRS = ["agents", "effort-agents"];
 
 // Every agent file the plugin ships, as plugin.json's "agents" list names them.
+/** @param {string} pluginRoot */
 export function pluginAgentPaths(pluginRoot) {
   return AGENT_DIRS.flatMap((dir) =>
     existsSync(join(pluginRoot, dir))
@@ -931,6 +963,7 @@ export function pluginAgentPaths(pluginRoot) {
 
 // Claude Code's loader tolerates frontmatter that strict YAML rejects, so an
 // agent file can load locally and still be unreadable to another parser.
+/** @param {string} pluginRoot */
 export function validateAgentFrontmatter(pluginRoot) {
   const failures = pluginAgentPaths(pluginRoot).flatMap((path) => {
     try {

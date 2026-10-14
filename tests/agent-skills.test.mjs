@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { assert, describe, expect, test } from "vitest";
 import {
   existsSync,
   mkdirSync,
@@ -20,6 +20,7 @@ import {
   publicSkills,
   resolveModels,
 } from "../tools/generate.mjs";
+import { isModelPolicy } from "../tools/model-policy.mjs";
 import { codexModelNamesSection } from "../tools/runtimes.mjs";
 import { validateProsePaths, validateSkillsTree, walk } from "../tools/validate-skills.mjs";
 
@@ -59,7 +60,9 @@ describe("shared Agent Skills tree", () => {
         "Open `../../agents/comment-sicko.md`.",
       ]) {
         writeFileSync(join(skill, "SKILL.md"), `# Example\n\n${prose}\n`);
-        expect(() => validateProsePaths(root)).toThrow("agents/comment-sicko.md is not installed with the skills tree");
+        expect(() => validateProsePaths(root)).toThrow(
+          "agents/comment-sicko.md is not installed with the skills tree",
+        );
       }
     } finally {
       rmSync(plugin, { recursive: true, force: true });
@@ -113,7 +116,10 @@ describe("shared Agent Skills tree", () => {
     const vendored = join(root, "example/scripts/node_modules/dep");
     mkdirSync(vendored, { recursive: true });
     writeFileSync(join(root, "example/SKILL.md"), "# Example\n");
-    writeFileSync(join(vendored, "Readme.md"), "[docs](./docs/missing.md)\nRead `../../../../etc/passwd`.\n");
+    writeFileSync(
+      join(vendored, "Readme.md"),
+      "[docs](./docs/missing.md)\nRead `../../../../etc/passwd`.\n",
+    );
 
     try {
       expect(() => validateSkillsTree(root)).not.toThrow();
@@ -203,7 +209,9 @@ describe("shared Agent Skills tree", () => {
       .filter((file) => file.endsWith(".md"))
       .map((file) => readFileSync(file, "utf8"))
       .join("\n");
-    const vendored = PORTABLE_ASSETS.map(({ target }) => target).filter((target) => target.includes("/agents/"));
+    const vendored = PORTABLE_ASSETS.map(({ target }) => target).filter((target) =>
+      target.includes("/agents/"),
+    );
     expect(vendored.length).toBeGreaterThan(0);
     expect(vendored.filter((target) => !prose.includes(target))).toEqual([]);
   });
@@ -217,7 +225,9 @@ describe("shared Agent Skills tree", () => {
   test("the plan copies each portable asset from its source into a directory it owns", () => {
     const { files, ownedDirs } = plan(repoRoot);
     for (const { source, target } of PORTABLE_ASSETS) {
-      expect(files[`plugins/pstack/skills/${target}`]).toBe(readFileSync(join(repoRoot, source), "utf8"));
+      expect(files[`plugins/pstack/skills/${target}`]).toBe(
+        readFileSync(join(repoRoot, source), "utf8"),
+      );
       expect(ownedDirs).toContain(`plugins/pstack/skills/${dirname(target)}`);
     }
   });
@@ -247,6 +257,10 @@ describe("shared Agent Skills tree", () => {
 });
 
 describe("agentSkills reads frontmatter as YAML", () => {
+  /**
+   * @param {string} name
+   * @param {string} text
+   */
   function readSkill(name, text) {
     const root = mkdtempSync(join(tmpdir(), "pstack-frontmatter-"));
     try {
@@ -258,37 +272,62 @@ describe("agentSkills reads frontmatter as YAML", () => {
     }
   }
 
+  test.each(["42", "true", "null", "[]", "{}"])(
+    "a non-string frontmatter name %s is rejected before description validation",
+    (name) => {
+      expect(() => readSkill("example", `---\nname: ${name}\ndescription: 42\n---\n`)).toThrow(
+        /frontmatter name .* != directory "example"/,
+      );
+    },
+  );
+
   test("a folded block scalar description is read as its folded value", () => {
-    const skill = readSkill("folded", "---\nname: folded\ndescription: >-\n  Use when\n  folding.\n---\n\nbody\n");
+    const skill = readSkill(
+      "folded",
+      "---\nname: folded\ndescription: >-\n  Use when\n  folding.\n---\n\nbody\n",
+    );
     expect(skill.description).toBe("Use when folding.");
   });
 
   test("the 1024 limit measures the parsed description, not its YAML source", () => {
     const value = "a".repeat(990) + '"'.repeat(30);
-    const quoted = readSkill("quoted", `---\nname: quoted\ndescription: ${JSON.stringify(value)}\n---\n`);
-    expect(quoted.description).toBe(value);
-    expect(() => readSkill("long", `---\nname: long\ndescription: >-\n  ${"a".repeat(1025)}\n---\n`)).toThrow(
-      "description exceeds the portable Agent Skills limit of 1024 characters",
+    const quoted = readSkill(
+      "quoted",
+      `---\nname: quoted\ndescription: ${JSON.stringify(value)}\n---\n`,
     );
+    expect(quoted.description).toBe(value);
+    expect(() =>
+      readSkill("long", `---\nname: long\ndescription: >-\n  ${"a".repeat(1025)}\n---\n`),
+    ).toThrow("description exceeds the portable Agent Skills limit of 1024 characters");
   });
 
   test("a CRLF file yields its name", () => {
-    expect(readSkill("crlf", "---\r\nname: crlf\r\ndescription: d\r\n---\r\n\r\nbody\r\n").name).toBe("crlf");
+    expect(
+      readSkill("crlf", "---\r\nname: crlf\r\ndescription: d\r\n---\r\n\r\nbody\r\n").name,
+    ).toBe("crlf");
   });
 
   test("user-invocable: false with a trailing space reads as not user-invocable", () => {
-    expect(readSkill("spaced", "---\nname: spaced\ndescription: d\nuser-invocable: false \n---\n").userInvocable).toBe(
-      false,
-    );
+    expect(
+      readSkill("spaced", "---\nname: spaced\ndescription: d\nuser-invocable: false \n---\n")
+        .userInvocable,
+    ).toBe(false);
   });
 });
 
 describe("Codex model names", () => {
   test("names a strongest Codex model for the roles that default to it on Claude", () => {
+    /** @type {unknown} */
     const raw = JSON.parse(readFileSync(join(repoRoot, "plugins/pstack/models.json"), "utf8"));
-    const oneOff = raw.roles.map((r) => (r.role === "swarm workers" ? { ...r, models: ["haiku"] } : r));
+    assert(isModelPolicy(raw), "the fixture must have the model policy shape");
+    assert(typeof raw.codex.strongest === "string", "the strongest Codex model is one name");
+    const oneOff = raw.roles.map((r) =>
+      r.role === "swarm workers" ? { ...r, models: ["haiku"] } : r,
+    );
     const section = codexModelNamesSection(resolveModels({ ...raw, roles: oneOff }));
-    const strongestLine = section.split("\n").find((line) => line.includes("strongest Claude model"));
+    const strongestLine = section
+      .split("\n")
+      .find((line) => line.includes("strongest Claude model"));
 
     expect(strongestLine).not.toContain("swarm workers");
 

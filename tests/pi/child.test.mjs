@@ -16,6 +16,13 @@ test("a command written to a child that closed its stdin resolves undefined once
   expect((await child.exited).exitCode).toBe(0);
 });
 
+test("commands and steering after child exit settle without a response", async () => {
+  const child = scripted("process.exit(0)");
+  expect((await child.exited).exitCode).toBe(0);
+  expect(await child.command({ type: "steer", message: "after exit" })).toBeUndefined();
+  expect(await child.steer("after exit")).toEqual({ response: undefined, taken: false });
+});
+
 test("a response whose success is not a boolean settles its command as failed instead of waiting for exit", async () => {
   const child = scripted(
     `${commandLines}.on("line", (l) => { const c = JSON.parse(l); process.stdout.write(JSON.stringify({ id: c.id, type: "response", command: c.type, success: c.type === "prompt" ? true : "nope", data: { disposition: "started" } }) + "\\n"); });` +
@@ -47,9 +54,18 @@ test("a steer answered after the run settled was not taken", async () => {
 
 test("a multibyte character split across two stdout chunks reaches the final text intact", async () => {
   const lines = [
-    { type: "message_end", message: { role: "assistant", content: [{ type: "text", text: "café ok" }], stopReason: "stop" } },
+    {
+      type: "message_end",
+      message: {
+        role: "assistant",
+        content: [{ type: "text", text: "café ok" }],
+        stopReason: "stop",
+      },
+    },
     { type: "agent_settled" },
-  ].map((e) => `${JSON.stringify(e)}\n`).join("");
+  ]
+    .map((e) => `${JSON.stringify(e)}\n`)
+    .join("");
   const cut = Buffer.byteLength(lines.slice(0, lines.indexOf("é"))) + 1;
   const child = scripted(
     `const b = Buffer.from(${JSON.stringify(lines)}); process.stdout.write(b.subarray(0, ${cut}));` +

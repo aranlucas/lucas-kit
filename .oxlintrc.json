@@ -24,7 +24,6 @@
   "rules": {
     "eslint/curly": "off",
     "eslint/no-console": "off",
-    "unicorn/no-useless-undefined": "off",
     "unicorn/consistent-function-scoping": "off",
     "anti-slop/no-array-filter-map": "off",
     "anti-slop/no-known-value-widening": "off",

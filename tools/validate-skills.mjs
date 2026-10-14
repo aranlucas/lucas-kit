@@ -7,11 +7,18 @@ import { pathToFileURL } from "node:url";
 // The one directory walker for every tool in tools/. `node_modules` under
 // poteto-mode/scripts is gitignored but present on any machine that ran the
 // vendored tooling's install, and its READMEs are not ours to validate.
+/** @type {ReadonlySet<string>} */
 export const SKIPPED_DIRS = new Set([".git", "node_modules"]);
 
 // Sorted, so reports and scans read the same on every filesystem.
+/**
+ * @param {string} dir
+ * @returns {readonly string[]}
+ */
 export function walk(dir) {
-  const entries = readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name));
+  const entries = readdirSync(dir, { withFileTypes: true }).toSorted((a, b) =>
+    a.name.localeCompare(b.name),
+  );
   return entries.flatMap((entry) => {
     if (SKIPPED_DIRS.has(entry.name)) return [];
     const path = join(dir, entry.name);
@@ -19,10 +26,18 @@ export function walk(dir) {
   });
 }
 
+/**
+ * @param {string} dir
+ * @returns {readonly string[]}
+ */
 export function markdownFiles(dir) {
   return walk(dir).filter((path) => path.endsWith(".md"));
 }
 
+/**
+ * @param {string} text
+ * @returns {readonly string[]}
+ */
 function markdownTargets(text) {
   const targets = [];
   for (const [, raw] of text.matchAll(/\]\(([^)\n]*)\)/g)) targets.push(destination(raw));
@@ -32,6 +47,10 @@ function markdownTargets(text) {
   return targets.filter(Boolean);
 }
 
+/**
+ * @param {string} raw
+ * @returns {string}
+ */
 function destination(raw) {
   const value = raw.trim();
   if (value.startsWith("<")) {
@@ -53,6 +72,12 @@ function destination(raw) {
   return out;
 }
 
+/**
+ * Compare lexical paths; callers resolve symlinks separately when required.
+ * @param {string} root
+ * @param {string} path
+ * @returns {boolean}
+ */
 export function pathIsInside(root, path) {
   const rel = relative(root, path);
   return rel === "" || (rel !== ".." && !rel.startsWith(`..${sep}`) && !isAbsolute(rel));
@@ -65,6 +90,12 @@ export function pathIsInside(root, path) {
 // (beside the skills tree, or reachable through ../) but not inside the
 // tree. Tokens that resolve to nothing are placeholders, slash commands, or
 // maintainer notes and are left alone.
+/**
+ * @param {string} text
+ * @param {string} file
+ * @param {string} root
+ * @returns {readonly string[]}
+ */
 function prosePathProblems(text, file, root) {
   const pluginRoot = dirname(root);
   const problems = [];
@@ -74,12 +105,18 @@ function prosePathProblems(text, file, root) {
     const candidates = [resolve(dirname(file), token), resolve(pluginRoot, token)];
     const outside = candidates.find((path) => existsSync(path) && !pathIsInside(root, path));
     if (outside) {
-      problems.push(`${relative(root, file)} -> ${token} (${relative(pluginRoot, outside)} is not installed with the skills tree)`);
+      problems.push(
+        `${relative(root, file)} -> ${token} (${relative(pluginRoot, outside)} is not installed with the skills tree)`,
+      );
     }
   }
   return problems;
 }
 
+/**
+ * @param {string} skillsDir
+ * @returns {void}
+ */
 export function validateProsePaths(skillsDir) {
   const root = resolve(skillsDir);
   const problems = [];
@@ -91,6 +128,10 @@ export function validateProsePaths(skillsDir) {
   }
 }
 
+/**
+ * @param {string} skillsDir
+ * @returns {void}
+ */
 export function validateSkillsTree(skillsDir) {
   const root = resolve(skillsDir);
   const realRoot = realpathSync(root);
@@ -136,6 +177,9 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     validateProsePaths(resolve(skillsDir));
     console.log(`ok: no prose in ${skillsDir} points at a path outside it`);
   } catch (error) {
+    // Preserve native message lookup and coercion for non-Error throws, including
+    // inherited messages and the existing nullish/Symbol failures.
+    // oxlint-disable-next-line typescript/restrict-template-expressions
     console.error(`FAIL: ${error.message}`);
     process.exit(1);
   }
