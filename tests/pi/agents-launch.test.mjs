@@ -1,5 +1,5 @@
 // What the agent tool registers and the child command a call produces.
-import { describe, expect, test } from "vitest";
+import { assert, describe, expect, test } from "vitest";
 import { chmodSync, mkdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -105,7 +105,9 @@ describe("agent tool", () => {
     const { w, pi, ctx } = setup();
     await pi.call("agent", { description: "p", prompt: "first", subagent_type: "pstack:poteto-agent" }, ctx);
     rmSync(join(w.agentDir, "pstack", "parent-session", "prompts"), { recursive: true });
-    const removedType = recordWith(pi.entries.at(-1).data, { agent: { subagentType: "pstack:removed" } });
+    const last = pi.entries.at(-1);
+    assert.ok(last);
+    const removedType = recordWith(last.data, { agent: { subagentType: "pstack:removed" } });
 
     const resumed = await restore(w, [agentEntry(removedType)]);
     const err = await resumed.call("send_message", { to: "p", message: "again" }, ctx).catch((e) => e);

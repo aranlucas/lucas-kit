@@ -136,7 +136,23 @@ function checkPiModels(pi, { raw, fail, isObject }) {
 // Every tier needs a T3 target in the sheet grammar of setup-pstack's
 // t3-sheet.mjs, the panel must span families, and every role must name a tier
 // so the T3 sheet can follow it.
-function checkT3Models(t3, { raw, fail, unique }) {
+/** @typedef {Pick<import("./model-policy.mjs").ModelPolicy, "tiers" | "roles">} T3ValidationCore */
+/**
+ * The generator checks these core fields before invoking runtime validation.
+ * Runtime-specific values remain unknown until this function checks them.
+ * @typedef {object} T3ValidationOptions
+ * @property {T3ValidationCore} raw
+ * @property {(message: string) => never} fail
+ * @property {(values: readonly unknown[], owner: string) => void} unique
+ */
+/**
+ * @param {Readonly<Record<string, unknown>>} t3
+ * @param {T3ValidationOptions} options
+ */
+function checkT3Models(t3, { raw, fail: reportFailure, unique }) {
+  /** @type {T3ValidationOptions["fail"]} */
+  const fail = reportFailure;
+
   for (const tier of Object.keys(raw.tiers)) {
     if (!Object.hasOwn(t3, tier)) fail(`t3 has no target for tier "${tier}"`);
   }

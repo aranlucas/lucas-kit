@@ -17,7 +17,18 @@ import { fileURLToPath } from "node:url";
 const INHERIT = ["inherit-parent", "auto"];
 const HOOK_VALUES = ["on", "off"];
 
+/**
+ * @typedef {object} ParsedTarget
+ * @property {string} providerInstanceId
+ * @property {string} model
+ * @property {Record<string, string>} options
+ */
+
 // Throws on a malformed entry; returns null for an inherit alias.
+/**
+ * @param {string} text
+ * @returns {ParsedTarget | null}
+ */
 export function parseEntry(text) {
   const [target, ...pairs] = text.trim().split(/\s+/);
   if (INHERIT.includes(target)) {
@@ -26,7 +37,8 @@ export function parseEntry(text) {
   }
   const match = target.match(/^([A-Za-z0-9_-]+)\/([A-Za-z0-9._-]+)$/);
   if (!match) throw new Error(`"${text.trim()}" does not start with <providerInstanceId>/<modelId>`);
-  const options = Object.create(null);
+  // This fresh null-prototype dictionary receives only matched string values.
+  const options = /** @type {Record<string, string>} */ (Object.create(null));
   for (const pair of pairs) {
     const option = pair.match(/^([A-Za-z0-9_]+)=([A-Za-z0-9._-]+)$/);
     if (!option) throw new Error(`"${text.trim()}": "${pair}" is not <optionId>=<value>`);
@@ -38,19 +50,37 @@ export function parseEntry(text) {
 
 // The family is the model ID's first segment (`claude`, `gpt`, `grok`), so a
 // Claude model served by a Codex-driver pool still counts as Claude.
+/** @param {string} model */
 export const family = (model) => model.split("-")[0];
 
 // A panel's families among its concrete targets. An inherit entry does not
 // count: one sheet serves every thread on the machine, so its family depends on
 // the thread that dispatches.
+/**
+ * @param {readonly (ParsedTarget | null)[]} entries
+ * @returns {Set<string>}
+ */
 export function panelFamilies(entries) {
-  return new Set(entries.filter(Boolean).map((e) => family(e.model)));
+  // The existing truthy filter removes null from the declared input union.
+  // Enumerate inputs before caller-owned model getters can mutate later entries.
+  return new Set(entries.filter(Boolean).map((entry) => family((/** @type {ParsedTarget} */ (entry)).model)));
 }
 
+/**
+ * @typedef {object} ParsedSheetLine
+ * @property {number} line
+ * @property {string | undefined} key
+ * @property {string | undefined} value
+ */
+
 // Every line but blank lines and `#` headings, as `{ line, key, value }`, with
-// no key or value when the line is not exactly `<key>: <value>`. setup-pstack
-// writes the sheet, so it holds no prose, and one strict rule leaves no shape a
-// misspelled role line can slip through.
+// undefined key and value when the line is not exactly `<key>: <value>`.
+// setup-pstack writes the sheet, so it holds no prose, and one strict rule leaves
+// no shape a misspelled role line can slip through.
+/**
+ * @param {string} markdown
+ * @returns {ParsedSheetLine[]}
+ */
 export function parseSheet(markdown) {
   return markdown
     .replace(/^\uFEFF/, "")
@@ -101,7 +131,7 @@ export function checkSheet(sheet, { roles, defaults, catalog }) {
       }
     }
     const runnable = [];
-    for (const entry of entries.filter(Boolean)) {
+    for (const entry of entries.filter((target) => target !== null)) {
       const found = checkTarget(entry, catalog);
       problems.push(...found.map((p) => `${key}: ${p}`));
       if (!found.length) runnable.push(entry);

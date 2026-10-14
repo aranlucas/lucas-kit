@@ -11,9 +11,13 @@ import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
 export const UNREADABLE = Symbol("unreadable sheet");
 export const NO_READ_PERMISSION = Symbol("sheet without read permission");
 
+/** @typedef {string | Buffer | typeof UNREADABLE | typeof NO_READ_PERMISSION | null} SheetInput */
+/** @typedef {{ name: string, sheet: Exclude<SheetInput, null>, off: boolean }} SheetCase */
+
 // chmod cannot deny a read on Windows, or to root.
 export const chmodDeniesReads = process.platform !== "win32" && process.getuid?.() !== 0;
 
+/** @type {SheetCase[]} */
 export const sheetCases = [
   { name: "no session hook line", sheet: "bug-fix: configured-model\n", off: false },
   { name: "on", sheet: "bug-fix: configured-model\nsession hook: on\n", off: false },
@@ -31,7 +35,7 @@ export const sheetCases = [
   { name: "trailing space", sheet: "session hook: off \n", off: false },
   { name: "longer value", sheet: "session hook: offline\n", off: false },
   { name: "a directory in place of the file", sheet: UNREADABLE, off: false },
-  ...(chmodDeniesReads ? [{ name: "no read permission on the file", sheet: NO_READ_PERMISSION, off: false }] : []),
+  ...(chmodDeniesReads ? [/** @satisfies {SheetCase} */ ({ name: "no read permission on the file", sheet: NO_READ_PERMISSION, off: false })] : []),
 ];
 
 // Write a case's sheet at path; UNREADABLE puts a directory there instead, and

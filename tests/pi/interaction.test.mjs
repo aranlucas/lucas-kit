@@ -1,5 +1,5 @@
 // ask_user_question, schedule_wakeup, and /loop through the fake ExtensionAPI.
-import { afterEach, beforeEach, describe, expect, vi, test } from "vitest";
+import { afterEach, assert, beforeEach, describe, expect, vi, test } from "vitest";
 
 import { DONE, OTHER } from "../../plugins/pstack/pi/ask.ts";
 import { resultText, useWorld } from "./harness.mjs";
@@ -459,7 +459,9 @@ describe("/loop", () => {
       if (started) await run(started);
       expect(resultText(await pi.call("schedule_wakeup", { delaySeconds: 60, prompt }, ctx))).toContain("Wakeup scheduled");
       vi.advanceTimersByTime(60_000);
-      expect(pi.userMessages.at(-1).content).toBe(prompt);
+      const last = pi.userMessages.at(-1);
+      assert.ok(last);
+      expect(last.content).toBe(prompt);
     });
   }
 

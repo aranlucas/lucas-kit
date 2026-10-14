@@ -18,6 +18,7 @@ const script = join(root, "plugins/pstack/skills/setup-pstack/scripts/t3-sheet.m
 const catalogPath = join(root, "tests/fixtures/t3-catalog.json");
 const catalog = JSON.parse(readFileSync(catalogPath, "utf8"));
 const { roles, t3: defaults } = loadModels();
+/** @param {string} text */
 const check = (text, over = catalog) => checkSheet(parseSheet(text), { roles, defaults, catalog: over });
 const PANEL = "interrogate reviewers";
 

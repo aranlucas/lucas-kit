@@ -1,6 +1,6 @@
 // One agent run through the fake ExtensionAPI, with the fake pi as the child:
 // its lifecycle, how its end is classified, its output, and stopping it.
-import { describe, expect, test } from "vitest";
+import { assert, describe, expect, test } from "vitest";
 import { readFileSync, rmSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 
@@ -41,7 +41,9 @@ describe("agent tool", () => {
     let aliveAtNotice;
     const send = pi.api.sendMessage;
     pi.api.sendMessage = (m, o) => {
-      aliveAtNotice = alive(pi.entries.at(-1).data.pid);
+      const last = pi.entries.at(-1);
+      assert.ok(last);
+      aliveAtNotice = alive(last.data.pid);
       send(m, o);
     };
     const result = await pi.call("agent", { description: "bg job", prompt: "go", run_in_background: true }, ctx);
@@ -83,7 +85,14 @@ describe("agent tool", () => {
       await pi.call("agent", { description: prompt, prompt, run_in_background: true }, ctx);
     }
     await waitFor(() => pi.messages.length === 4);
-    const byDesc = Object.fromEntries(pi.messages.map(({ message }) => [message.content.match(/description: (\w+)/)[1], message]));
+
+    const byDesc = Object.fromEntries(pi.messages.map(({ message }) => {
+      const description = message.content.match(/description: (\w+)/);
+      assert.ok(description);
+
+      return [description[1], message];
+    }));
+
     expect(byDesc.crash.content).toContain("status: failed");
     expect(byDesc.crash.content).toContain("exit code: 0");
     expect(byDesc.crash.content).toContain("partial\n\nprovider exploded");
@@ -193,6 +202,7 @@ describe("agent tool", () => {
     await pi.call("agent", { description: "big", prompt: "x", run_in_background: true }, ctx);
     await waitFor(() => pi.messages.length === 1);
     const { content, details } = pi.messages[0].message;
+    assert.ok(details.outputFile);
     expect(dirname(details.outputFile)).toBe(join(w.agentDir, "pstack", "parent-session", "agents"));
     expect(basename(details.outputFile)).toMatch(new RegExp(`^${details.agentId}\\.\\d+\\.out\\.md$`));
     expect(content).toContain(`full output: ${details.outputFile}`);
@@ -206,9 +216,13 @@ describe("agent tool", () => {
     const { pi, ctx } = setup({ script: { default: [{ reply: big }] } });
     await pi.call("agent", { description: "big", prompt: "x", run_in_background: true }, ctx);
     await waitFor(() => pi.messages.length === 1);
-    const last = pi.entries.at(-1).data;
+    const entry = pi.entries.at(-1);
+    assert.ok(entry);
+    const last = entry.data;
     expect(last.status).toBe("completed");
+    assert.ok(last.status === "completed");
     expect(Buffer.byteLength(last.finalText)).toBeLessThanOrEqual(50 * 1024);
+    assert.ok(last.outputFile);
     expect(readFileSync(last.outputFile, "utf8")).toBe(big);
   });
 
@@ -220,6 +234,8 @@ describe("agent tool", () => {
     await waitFor(() => pi.messages.length === 2);
     const [first, second] = pi.messages.map((m) => m.message.details.outputFile);
     expect(second).not.toBe(first);
+    assert.ok(first);
+    assert.ok(second);
     expect(readFileSync(first, "utf8").slice(0, 10)).toBe("RUN:first ");
     expect(readFileSync(second, "utf8").slice(0, 11)).toBe("RUN:second ");
   });
@@ -320,7 +336,13 @@ describe("stop_agent", () => {
     await pi.call("stop_agent", { id: quiet }, ctx);
     await pi.call("stop_agent", { id: chatty }, ctx);
 
-    const notice = (id) => pi.messages.find((m) => m.message.details.agentId === id).message.content;
+    const notice = (id) => {
+      const found = pi.messages.find((m) => m.message.details.agentId === id);
+      assert.ok(found);
+
+      return found.message.content;
+    };
+
     expect(notice(quiet)).toContain("status: stopped");
     expect(notice(quiet)).toContain("stopped before it replied");
     expect(notice(chatty)).toContain("halfway");

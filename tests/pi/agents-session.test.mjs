@@ -1,6 +1,6 @@
 // The agent registry across a session's life: restore from persisted entries,
 // shutdown, an abrupt parent exit, and the settle hold of a non-interactive run.
-import { describe, expect, vi, test } from "vitest";
+import { assert, describe, expect, vi, test } from "vitest";
 import childProcess from "node:child_process";
 import fs from "node:fs";
 import { syncBuiltinESMExports } from "node:module";
@@ -41,7 +41,9 @@ describe("registry", () => {
     await pi.call("agent", { description: "orphan", prompt: "x", run_in_background: true }, ctx);
     await w.until("grandchild");
     const stranger = w.spawn("sleep", ["30"], { detached: true });
-    const entries = [...pi.entries, agentEntry(recordWith(pi.entries.at(-1).data, { agent: { id: "astranger" }, ...reusedBy(stranger) }))];
+    const last = pi.entries.at(-1);
+    assert.ok(last);
+    const entries = [...pi.entries, agentEntry(recordWith(last.data, { agent: { id: "astranger" }, ...reusedBy(stranger) }))];
 
     const resumed = await restore(w, entries);
     await waitFor(() => w.log().every((r) => !alive(r.pid)));
@@ -59,11 +61,14 @@ describe("registry", () => {
     const member = await new Promise((r) => {
       let out = "";
       const p = w.spawn("pgrep", ["-g", String(leader.pid)], { stdio: ["ignore", "pipe", "ignore"] });
+      assert.ok(p.stdout);
       p.stdout.on("data", (d) => (out += d));
       p.on("exit", () => r(Number(out.trim().split("\n")[0])));
     });
     expect(alive(member)).toBe(true);
-    const entries = [...pi.entries, agentEntry(recordWith(pi.entries.at(0).data, { agent: { id: "agroup" }, status: "running", pid: leader.pid, parentPid: parent.pid }))];
+    const first = pi.entries.at(0);
+    assert.ok(first);
+    const entries = [...pi.entries, agentEntry(recordWith(first.data, { agent: { id: "agroup" }, status: "running", pid: leader.pid, parentPid: parent.pid }))];
 
     await restore(w, entries);
     await sleep(2 * w.settings.killGraceMs);
@@ -73,14 +78,16 @@ describe("registry", () => {
   test("a persisted record that does not match the schema is dropped at restore, and the rest load", async () => {
     const { w, pi, ctx } = setup();
     const { details } = await pi.call("agent", { description: "sound", prompt: "x" }, ctx);
+    const last = pi.entries.at(-1);
+    assert.ok(last);
     const bad = [
       { agent: { id: "anoparent" }, status: "running", pid: 1 },
       { agent: { id: 7 }, status: "completed" },
-      recordWith(pi.entries.at(-1).data, { agent: { id: "abadstatus" }, status: "done" }),
-      recordWith(pi.entries.at(-1).data, { agent: { id: "anoexit" }, exitCode: "0" }),
-      recordWith(pi.entries.at(-1).data, { agent: { id: "anosession", sessionId: "" } }),
+      recordWith(last.data, { agent: { id: "abadstatus" }, status: "done" }),
+      recordWith(last.data, { agent: { id: "anoexit" }, exitCode: "0" }),
+      recordWith(last.data, { agent: { id: "anosession", sessionId: "" } }),
       // The shape before identity moved under `agent`.
-      (({ agent, ...state }) => ({ ...agent, ...state, id: "aflat" }))(pi.entries.at(-1).data),
+      (({ agent, ...state }) => ({ ...agent, ...state, id: "aflat" }))(last.data),
       "garbage",
       null,
     ];
@@ -98,10 +105,15 @@ describe("registry", () => {
       stdio: ["ignore", "pipe", "inherit"],
     });
     let printed = "";
+    assert.ok(host.stdout);
     host.stdout.on("data", (d) => (printed += d));
     await w.until("grandchild");
     await waitFor(() => printed.includes("\n"));
-    return { w, ctx, host, entries: JSON.parse(printed) };
+    /** @type {unknown} */
+    const entries = JSON.parse(printed);
+    assert.ok(Array.isArray(entries));
+
+    return { w, ctx, host, entries };
   }
 
   test("an orphan cannot resume its session while its process awaits SIGKILL", async () => {
@@ -190,6 +202,7 @@ describe("registry", () => {
     try {
       if (failure === "restore") resumed = await restore(w, entries);
       else await sleep(2 * w.settings.killGraceMs);
+      assert.ok(resumed);
       expect((await listAgents(resumed, ctx))[0].status).toBe("running");
       await expect(resumed.call("send_message", { to: id, message: "again" }, ctx)).rejects.toThrow(/process.*has not exited/);
       expect(alive(first.pid)).toBe(true);
@@ -276,8 +289,10 @@ describe("registry", () => {
     const stranger = w.spawn("sleep", ["300"], { detached: true });
     const gone = w.spawn("sleep", ["0.1"]);
     await exitOf(gone);
+    const first = pi.entries.at(0);
+    assert.ok(first);
     const entries = Object.entries({ agone: { pid: gone.pid }, areused: reusedBy(stranger) }).map(([id, process]) =>
-      agentEntry(recordWith(pi.entries.at(0).data, { agent: { id }, status: "running", ...process, parentPid: reusedParent.pid })),
+      agentEntry(recordWith(first.data, { agent: { id }, status: "running", ...process, parentPid: reusedParent.pid })),
     );
 
     const resumed = await restore(w, entries);

@@ -1,6 +1,6 @@
 // settleWorktree against real git state: it must never drop a commit the agent
 // made. Then the agent tool's worktree isolation over it.
-import { describe, expect, test } from "vitest";
+import { assert, describe, expect, test } from "vitest";
 import { spawnSync } from "node:child_process";
 import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -262,8 +262,16 @@ describe("worktree isolation", () => {
 
     const err = await pi.call("send_message", { to: details.agentId, message: "again" }, ctx).catch((e) => e);
     expect(err.message).toContain("git worktree add");
-    await waitFor(() => pi.entries.at(-1).data.status === "failed");
-    expect(pi.entries.at(-1).data.finalText).toContain("git worktree add");
+    await waitFor(() => {
+      const last = pi.entries.at(-1);
+      assert.ok(last);
+
+      return last.data.status === "failed";
+    });
+    const last = pi.entries.at(-1);
+    assert.ok(last);
+    assert.ok(last.data.status === "failed");
+    expect(last.data.finalText).toContain("git worktree add");
     expect(w.invocations()).toHaveLength(1);
   });
 
