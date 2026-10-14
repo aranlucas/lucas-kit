@@ -2,6 +2,7 @@
 // one required input field of each mutation, and the pull request field the
 // mutation clears. Regenerate the input names with
 //   gh api graphql -f query='{ __type(name:"DequeuePullRequestInput") { inputFields { name } } }'
+// oxlint-disable-next-line anti-slop/no-known-value-widening -- Dynamic lookup preserves inherited-key rejection diagnostics, including constructor and toString.
 const MUTATIONS: Record<string, { input: string; clears: string }> = {
   disablePullRequestAutoMerge: {
     input: "pullRequestId",
@@ -23,7 +24,7 @@ const MUTATION =
 export function fakeGitHub(
   pullRequest: Record<string, unknown>,
   argv: readonly string[]
-): { data: Record<string, unknown> } {
+) {
   const query = argv.find((arg) => arg.startsWith("query=")) ?? "";
   if (!query.includes("mutation")) {
     // Drop nested selections, so `mergeQueueEntry { id }` does not count as

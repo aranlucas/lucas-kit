@@ -1,5 +1,5 @@
 // The compiler options the Pi typecheck derives from where Pi is installed.
-import { expect, test } from "bun:test";
+import { expect, test } from "vitest";
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -53,10 +53,10 @@ test("piDependency picks the copy nested under Pi over one beside it, as Node do
 });
 
 const PI = join("@earendil-works", "pi-coding-agent");
-const PI_PACKAGE_MODULE = resolve(import.meta.dir, "../tools/pi-package.mjs");
+const PI_PACKAGE_MODULE = resolve(import.meta.dirname, "../tools/pi-package.mjs");
 
-// Bun's child processes ignore edits to process.env, so run findPiPackage in a fresh bun with HOME, npm, brew, and
-// the bun variables pointed into a temp dir. Only the fake tree can match.
+// Run package discovery in a fresh process with HOME, npm, brew, and legacy
+// runtime install variables pointed into a temp dir. Only the fake tree can match.
 function findPiUnder(root, env, globalDir) {
   const piDir = join(globalDir, PI);
   mkdirSync(piDir, { recursive: true });

@@ -1,5 +1,5 @@
 // The note a tool result carries when its file matches a skill's `paths:` globs.
-import { describe, expect, test } from "bun:test";
+import { assert, describe, expect, test } from "vitest";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -27,6 +27,7 @@ describe("paths: auto-load note", () => {
     const [failed] = await pi.emit("tool_result", result("read", "src/a.ts", { isError: true }), ctx);
     expect(failed).toBeUndefined();
 
+    assert.ok(ctx.cwd);
     const [first] = await pi.emit("tool_result", result("edit", join(ctx.cwd, "src/deep/b.tsx")), ctx);
     expect(first.content[0]).toEqual({ type: "text", text: "file body" });
     const note = first.content[1].text;

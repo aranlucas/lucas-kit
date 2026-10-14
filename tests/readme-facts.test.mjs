@@ -1,7 +1,7 @@
 // Documentation states counts and the upstream pin in prose. Each is derivable from
 // the tree, so this pins every occurrence to its source instead of trusting a
 // hand edit to keep up.
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";

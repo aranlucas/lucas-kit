@@ -1,7 +1,7 @@
 // GitHub Copilot build contracts: the mapping names every Claude-specific term
 // the skills use, every skill with a Codex preamble also has the Copilot one,
 // and Copilot setup writes every role in models.json exactly once.
-import { describe, expect, test } from "bun:test";
+import { assert, describe, expect, test } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -86,12 +86,16 @@ describe("Copilot preambles", () => {
   });
 
   test("the Copilot preamble follows the Codex preamble in each stamped skill", () => {
-    const stamped = [...leads].filter(([, lines]) => lines.includes(copilot.preamble));
+    const copilotPreamble = copilot.preamble;
+    const codexPreamble = codex.preamble;
+    assert.exists(copilotPreamble);
+    assert.exists(codexPreamble);
+    const stamped = [...leads].filter(([, lines]) => lines.includes(copilotPreamble));
     expect(stamped.length).toBeGreaterThan(0);
     for (const [file, lines] of stamped) {
       const text = readFileSync(join(repoRoot, file), "utf8");
-      expect(text).toContain(copilot.preamble);
-      if (lines.includes(codex.preamble)) expect(text).toContain(`${codex.preamble}\n\n${copilot.preamble}\n`);
+      expect(text).toContain(copilotPreamble);
+      if (lines.includes(codexPreamble)) expect(text).toContain(`${codexPreamble}\n\n${copilotPreamble}\n`);
     }
   });
 
@@ -111,9 +115,14 @@ describe("Copilot setup questions", () => {
   const roles = models.roles.map((r) => r.role);
 
   test("step 6's sheet shape has a line for every role in models.json", () => {
-    const sheetShape = skill.slice(skill.indexOf("### 6. Write the override sheet"), skill.indexOf("### 7."));
-    const shaped = [...sheetShape.matchAll(/^([a-z][a-z ,-]*): /gm)].map((m) => m[1]).filter((r) => r !== "session hook" && r !== "default effort");
-    expect(shaped).toEqual(roles);
+    const sheetInstructions = skill.slice(skill.indexOf("### 6. Write the override sheet"), skill.indexOf("### 7."));
+    const documentedRoles = [...sheetInstructions.matchAll(/^([a-z][a-z ,-]*): /gm)].flatMap(
+      (m) => {
+        const role = m[1];
+        return role === "session hook" || role === "default effort" ? [] : [role];
+      },
+    );
+    expect(documentedRoles).toEqual(roles);
   });
 
   test("the roles-by-tier table lists every role once, under its tier", () => {

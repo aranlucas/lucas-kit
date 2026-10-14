@@ -9,16 +9,33 @@ import { Value } from "typebox/value";
 import { noticeOf, OUTPUT_CAP_BYTES, truncateUtf8 } from "./agent-text.ts";
 import type { AgentParams } from "./agent-tools.ts";
 import { alive, type ChildExit, PiChild, terminateGroup } from "./child.ts";
-import { DEPTH_FLAG, GENERAL_PURPOSE, loadAgentTypes, PSTACK_STATE_DIR, readSheet, resolveModel, type Settings } from "./config.ts";
-import { ensureWorktree, planWorktree, settleWorktree, type Worktree, worktreeSchema } from "./worktree.ts";
+import {
+  DEPTH_FLAG,
+  GENERAL_PURPOSE,
+  loadAgentTypes,
+  PSTACK_STATE_DIR,
+  readSheet,
+  resolveModel,
+  type Settings,
+} from "./config.ts";
+import {
+  ensureWorktree,
+  planWorktree,
+  settleWorktree,
+  type Worktree,
+  worktreeSchema,
+} from "./worktree.ts";
 
 const ENTRY_TYPE = "pstack-agents";
 // Claude Code lets agents nest three layers below the main session and withholds
 // the Agent tool at the third.
 const MAX_SPAWN_DEPTH = 3;
 
-const endedStatus = Type.Union([Type.Literal("completed"), Type.Literal("failed"), Type.Literal("stopped")]);
-type EndedStatus = Static<typeof endedStatus>;
+const endedStatus = Type.Union([
+  Type.Literal("completed"),
+  Type.Literal("failed"),
+  Type.Literal("stopped"),
+]);
 
 // Fixed when the agent starts and reused by every launch of it, so a resume
 // runs the same session, model, thinking, system prompt, and worktree.
@@ -79,7 +96,8 @@ interface Run {
 // A remote agent runs under the live pi process that restore left it to.
 type LocalAgent = { kind: "local"; record: RunningRecord; run: Run };
 // Unverified restores retry identity checks; interrupted ones await termination.
-type AgentState = LocalAgent
+type AgentState =
+  | LocalAgent
   | { kind: "remote"; record: RunningRecord }
   | { kind: "unverified"; record: RunningRecord }
   | { kind: "interrupted"; record: RunningRecord }
@@ -89,16 +107,30 @@ type AgentState = LocalAgent
 // reply completed, whatever the exit code of the shutdown after it. Stderr
 // diagnoses a failure; a stopped child's stderr is not its output (pi warns
 // there on every first run of a --session-id).
-function outcomeOf(exit: ChildExit, stopped: boolean): { status: EndedStatus; finalText: string } {
-  if (stopped) return { status: "stopped", finalText: exit.finalText || "(stopped before it replied)" };
-  if (exit.settled && exit.finalText && !exit.errorMessage) return { status: "completed", finalText: exit.finalText };
+function outcomeOf(exit: ChildExit, stopped: boolean) {
+  if (stopped)
+    return {
+      status: "stopped",
+      finalText: exit.finalText || "(stopped before it replied)",
+    } satisfies Pick<EndedRecord, "status" | "finalText">;
+  if (exit.settled && exit.finalText && !exit.errorMessage)
+    return { status: "completed", finalText: exit.finalText } satisfies Pick<
+      EndedRecord,
+      "status" | "finalText"
+    >;
   const diagnostics = exit.errorMessage || exit.stderr.trim();
-  const finalText = exit.finalText && diagnostics ? `${exit.finalText}\n\n${diagnostics}` : exit.finalText || diagnostics || "(no output)";
-  return { status: "failed", finalText };
+  const finalText =
+    exit.finalText && diagnostics
+      ? `${exit.finalText}\n\n${diagnostics}`
+      : exit.finalText || diagnostics || "(no output)";
+  return { status: "failed", finalText } satisfies Pick<EndedRecord, "status" | "finalText">;
 }
 
 // The text a record keeps: capped, with the full copy on disk when it was cut.
-function saveOutput(identity: AgentIdentity, text: string): Pick<EndedRecord, "finalText" | "outputFile"> {
+function saveOutput(
+  identity: AgentIdentity,
+  text: string,
+): Pick<EndedRecord, "finalText" | "outputFile"> {
   const capped = truncateUtf8(text, OUTPUT_CAP_BYTES);
   if (capped === text) return { finalText: text };
   const outputFile = join(identity.sessionDir, `${identity.id}.${Date.now()}.out.md`);
@@ -110,7 +142,7 @@ function saveOutput(identity: AgentIdentity, text: string): Pick<EndedRecord, "f
   }
 }
 
-function settle(worktree: Worktree): { kept: boolean; note: string } {
+function settle(worktree: Worktree) {
   try {
     return { kept: settleWorktree(worktree), note: "" };
   } catch (e) {
@@ -119,12 +151,22 @@ function settle(worktree: Worktree): { kept: boolean; note: string } {
 }
 
 function childArgs(identity: AgentIdentity, depth: number): string[] {
-  const args = ["--mode", "rpc", "--session-id", identity.sessionId, "--session-dir", identity.sessionDir];
+  const args = [
+    "--mode",
+    "rpc",
+    "--session-id",
+    identity.sessionId,
+    "--session-dir",
+    identity.sessionDir,
+  ];
   if (identity.model) args.push("--model", identity.model);
   if (identity.thinking) args.push("--thinking", identity.thinking);
   if (identity.systemPromptFile) args.push("--append-system-prompt", identity.systemPromptFile);
   args.push(`--${DEPTH_FLAG}`, String(depth + 1));
-  const excluded = [...(identity.readonly ? ["edit", "write"] : []), ...(depth + 1 >= MAX_SPAWN_DEPTH ? ["agent"] : [])];
+  const excluded = [
+    ...(identity.readonly ? ["edit", "write"] : []),
+    ...(depth + 1 >= MAX_SPAWN_DEPTH ? ["agent"] : []),
+  ];
   if (excluded.length) args.push("--exclude-tools", excluded.join(","));
   return args;
 }
@@ -145,7 +187,10 @@ function inspect(pid: number): { parentPid: number; start: string } | undefined 
   // the command name, which is in parentheses and may hold any character.
   const proc = /^ \S (\d+)(?: \S+){17} (\d+) /.exec(stat.slice(stat.lastIndexOf(")") + 1));
   if (proc) return { parentPid: Number(proc[1]), start: proc[2] };
-  const ps = spawnSync("ps", ["-o", "ppid=", "-o", "lstart=", "-p", String(pid)], { encoding: "utf8", env: { ...process.env, LC_ALL: "C", TZ: "UTC" } });
+  const ps = spawnSync("ps", ["-o", "ppid=", "-o", "lstart=", "-p", String(pid)], {
+    encoding: "utf8",
+    env: { ...process.env, LC_ALL: "C", TZ: "UTC" },
+  });
   const m = ps.status === 0 ? /^\s*(\d+)\s+(\S.*\S)\s*$/.exec(ps.stdout) : null;
   return m ? { parentPid: Number(m[1]), start: m[2] } : undefined;
 }
@@ -172,7 +217,9 @@ function fateOf(record: RunningRecord): Fate {
 // Stops an orphan, by its group so the bash command it has running goes too.
 // No other fate is signalled: a pid that may have been reused is not ours to hit.
 function reapOrphan(record: RunningRecord, killGraceMs: number): Promise<void> {
-  return record.pid === undefined ? Promise.resolve() : terminateGroup(record.pid, () => fateOf(record) === "orphan", killGraceMs);
+  return record.pid === undefined
+    ? Promise.resolve()
+    : terminateGroup(record.pid, () => fateOf(record) === "orphan", killGraceMs);
 }
 
 const now = () => new Date().toISOString();
@@ -192,9 +239,17 @@ export class AgentRunner {
     const type = params.subagent_type || GENERAL_PURPOSE;
     const types = loadAgentTypes(this.settings);
     const def = types.get(type);
-    if (!def) throw new Error(`Unknown subagent_type "${type}". Valid types: ${[...types.keys()].join(", ")}.`);
+    if (!def)
+      throw new Error(
+        `Unknown subagent_type "${type}". Valid types: ${[...types.keys()].join(", ")}.`,
+      );
     const parentModel = ctx.model ? `${ctx.model.provider}/${ctx.model.id}` : undefined;
-    const model = resolveModel(params.model ?? def.model, this.settings, readSheet(this.settings.agentDir), parentModel);
+    const model = resolveModel(
+      params.model ?? def.model,
+      this.settings,
+      readSheet(this.settings.agentDir),
+      parentModel,
+    );
 
     const id = `a${randomBytes(8).toString("hex")}`;
     const state = join(this.settings.agentDir, PSTACK_STATE_DIR, ctx.sessionManager.getSessionId());
@@ -227,7 +282,13 @@ export class AgentRunner {
       this.ensureSystemPrompt(identity);
       if (identity.worktree) ensureWorktree(identity.worktree);
     } catch (e) {
-      const failed: EndedRecord = { agent: identity, status: "failed", exitCode: null, endedAt: now(), finalText: (e as Error).message };
+      const failed: EndedRecord = {
+        agent: identity,
+        status: "failed",
+        exitCode: null,
+        endedAt: now(),
+        finalText: (e as Error).message,
+      };
       this.agents.set(identity.id, { kind: "ended", record: failed });
       this.persist(failed);
       throw e;
@@ -235,13 +296,30 @@ export class AgentRunner {
     const { command, args } = this.settings.pi;
     const child = new PiChild(
       command,
-      [...args, "--extension", join(this.settings.pluginRoot, "pi", "index.ts"), "--skill", join(this.settings.pluginRoot, "skills"), ...childArgs(identity, this.settings.depth)],
+      [
+        ...args,
+        "--extension",
+        join(this.settings.pluginRoot, "pi", "index.ts"),
+        "--skill",
+        join(this.settings.pluginRoot, "skills"),
+        ...childArgs(identity, this.settings.depth),
+      ],
       { cwd: identity.cwd, exitGraceMs: this.settings.exitGraceMs },
       prompt,
     );
     const pidStart = child.pid === undefined ? undefined : inspect(child.pid)?.start;
-    const record: RunningRecord = { agent: identity, status: "running", pid: child.pid, pidStart, parentPid: process.pid };
-    const run: Run = { child, background, done: child.exited.then((exit) => this.finish(identity, run, exit)) };
+    const record: RunningRecord = {
+      agent: identity,
+      status: "running",
+      pid: child.pid,
+      pidStart,
+      parentPid: process.pid,
+    };
+    const run: Run = {
+      child,
+      background,
+      done: child.exited.then((exit) => this.finish(identity, run, exit)),
+    };
     this.agents.set(identity.id, { kind: "local", record, run });
     this.persist(record);
     return record;
@@ -252,7 +330,10 @@ export class AgentRunner {
     const file = identity.systemPromptFile;
     if (!file || existsSync(file)) return;
     const body = loadAgentTypes(this.settings).get(identity.subagentType)?.body;
-    if (!body) throw new Error(`Agent ${identity.id} has lost its system prompt file, and its type "${identity.subagentType}" no longer provides one.`);
+    if (!body)
+      throw new Error(
+        `Agent ${identity.id} has lost its system prompt file, and its type "${identity.subagentType}" no longer provides one.`,
+      );
     mkdirSync(dirname(file), { recursive: true });
     writeFileSync(file, body, { mode: 0o600 });
   }
@@ -274,7 +355,10 @@ export class AgentRunner {
     // The model that called stop_agent already has the result, so a stop's
     // notice joins the context without starting another turn.
     if (run.background && run.ending !== "teardown") {
-      this.pi.sendMessage(noticeOf(record), status !== "stopped" ? { triggerTurn: true, deliverAs: "steer" } : { triggerTurn: false });
+      this.pi.sendMessage(
+        noticeOf(record),
+        status !== "stopped" ? { triggerTurn: true, deliverAs: "steer" } : { triggerTurn: false },
+      );
     }
     return record;
   }
@@ -306,7 +390,9 @@ export class AgentRunner {
     const matches = states.filter((state) => state.record.agent.description === to);
     if (matches.length === 1) return this.refreshRestored(matches[0]);
     if (matches.length > 1) {
-      throw new Error(`"${to}" matches several agents (${matches.map((state) => state.record.agent.id).join(", ")}); pass an agentId.`);
+      throw new Error(
+        `"${to}" matches several agents (${matches.map((state) => state.record.agent.id).join(", ")}); pass an agentId.`,
+      );
     }
     const known = states.map(({ record }) => `${record.agent.id} (${record.agent.description})`);
     throw new Error(`No agent "${to}". Known agents: ${known.join(", ") || "none"}.`);
@@ -314,13 +400,19 @@ export class AgentRunner {
 
   // An agent this process can act on. One running under another pi process is
   // not: only that process holds its stdin and can message or stop it.
-  private owned(to: string): Exclude<AgentState, { kind: "remote" | "unverified" | "interrupted" }> {
+  private owned(
+    to: string,
+  ): Exclude<AgentState, { kind: "remote" | "unverified" | "interrupted" }> {
     const state = this.find(to);
     if (state.kind === "remote") {
-      throw new Error(`Agent ${state.record.agent.id} is running under another pi process (pid ${state.record.parentPid}); only that process can message or stop it.`);
+      throw new Error(
+        `Agent ${state.record.agent.id} is running under another pi process (pid ${state.record.parentPid}); only that process can message or stop it.`,
+      );
     }
     if (state.kind === "unverified" || state.kind === "interrupted") {
-      throw new Error(`Agent ${state.record.agent.id}'s previous process (pid ${state.record.pid}) has not exited; it cannot resume or be stopped here until its exit is confirmed.`);
+      throw new Error(
+        `Agent ${state.record.agent.id}'s previous process (pid ${state.record.pid}) has not exited; it cannot resume or be stopped here until its exit is confirmed.`,
+      );
     }
     return state;
   }
@@ -336,9 +428,13 @@ export class AgentRunner {
       const { run } = state;
       const { response, taken } = await run.child.steer(message);
       if (taken) return { record: this.find(id).record, running: true };
-      if (response && !response.success) throw new Error(`Agent ${id} did not take the message: ${response.error}`);
+      if (response && !response.success)
+        throw new Error(`Agent ${id} did not take the message: ${response.error}`);
       await run.done;
-      if (run.ending) throw new Error(`Agent ${id} was stopped before it read the message; it was not delivered.`);
+      if (run.ending)
+        throw new Error(
+          `Agent ${id} was stopped before it read the message; it was not delivered.`,
+        );
     }
     return { record: this.launch(this.find(id).record.agent, message, true), running: false };
   }
@@ -414,10 +510,20 @@ export class AgentRunner {
   // process whose identity matches the record can be signalled.
   restore(entries: readonly SessionEntry[]): void {
     for (const entry of entries) {
-      if (entry.type !== "custom" || entry.customType !== ENTRY_TYPE || !Value.Check(recordSchema, entry.data)) continue;
+      if (
+        entry.type !== "custom" ||
+        entry.customType !== ENTRY_TYPE ||
+        !Value.Check(recordSchema, entry.data)
+      )
+        continue;
       const { id } = entry.data.agent;
       if (this.agents.get(id)?.kind === "local") continue;
-      this.agents.set(id, entry.data.status === "running" ? { kind: "remote", record: entry.data } : { kind: "ended", record: entry.data });
+      this.agents.set(
+        id,
+        entry.data.status === "running"
+          ? { kind: "remote", record: entry.data }
+          : { kind: "ended", record: entry.data },
+      );
     }
     for (const state of this.agents.values()) this.refreshRestored(state);
   }

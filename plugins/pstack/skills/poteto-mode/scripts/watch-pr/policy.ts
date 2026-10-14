@@ -191,6 +191,7 @@ const COMPUTED_ON_DEMAND: ReadonlySet<string> = new Set([
   "mergeable",
   "mergeStateStatus",
 ]);
+// SAFETY: VERDICT_FACTS is a private, unmodified exact object literal; its enumerable keys are declared PullRequestFacts fields.
 const changedFacts = (
   before: T.PullRequestFacts,
   after: T.PullRequestFacts

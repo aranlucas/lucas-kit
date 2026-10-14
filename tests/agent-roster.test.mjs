@@ -2,7 +2,7 @@
 // parameter description and the Subagent policy of the Pi, Copilot, Codex, and
 // T3 mappings. The generator stamps only the Claude manifest's agents array from
 // plugins/pstack/agents/, so these five copies are the ones that can drift.
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "vitest";
 import { readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { fileURLToPath } from "node:url";

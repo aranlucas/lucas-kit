@@ -1,6 +1,6 @@
 // send_message through the fake ExtensionAPI: a steer into a running agent, a
 // resume of a finished one, and the races between the two.
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "vitest";
 
 import { alive, listAgents, resultText, sleep, useWorld, waitFor } from "./harness.mjs";
 

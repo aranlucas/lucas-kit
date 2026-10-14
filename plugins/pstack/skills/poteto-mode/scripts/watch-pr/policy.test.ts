@@ -1,4 +1,4 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it } from "vitest";
 import { WatchDeadline } from "./deadline.ts";
 import { WatcherQueryError } from "./github.ts";
 import {
@@ -445,7 +445,7 @@ describe("review gate", () => {
       blocker: { kind: "merge-gate", pr: context(23), reason: "review-required" },
     });
     expect(
-      selectTierMajorStackDecision([snapshot] as NonEmpty<typeof snapshot>),
+      selectTierMajorStackDecision([snapshot]),
     ).toMatchObject({
       kind: "blocker",
       blocker: { kind: "merge-gate", reason: "review-required" },

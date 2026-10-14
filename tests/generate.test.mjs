@@ -1,6 +1,7 @@
+import { parse as parseYaml } from "yaml";
 // Unit tests for the generator: the region model that stamps model policy into
 // skills, the version stamp, the validators, and the plan it writes from.
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, assert, describe, expect, test } from "vitest";
 import { spawnSync } from "node:child_process";
 import {
   cpSync,
@@ -343,7 +344,7 @@ describe("slashCommands", () => {
     for (const menu of samples) {
       let parsed;
       try {
-        parsed = Bun.YAML.parse(promptStub({ name: "b", menu }, RUNTIMES[0]).split("---\n")[1]).description;
+        parsed = parseYaml(promptStub({ name: "b", menu }, RUNTIMES[0]).split("---\n")[1]).description;
       } catch {}
       let accepted = true;
       try {
@@ -462,7 +463,9 @@ describe("deriveSkill", () => {
     for (const file of ["plugins/pstack/skills/teach/SKILL.md", "plugins/pstack/skills/poteto-mode/playbooks/refactoring.md"]) {
       const text = "---\nname: teach\ndescription: d\n---\n\n# Title\n\nbody\n";
       const out = deriveSkill(file, text, models, leads);
-      expect(out).toBe(text.replace("# Title\n\n", `# Title\n\n${leads.get(file).join("\n\n")}\n\n`));
+      const expectedLeads = leads.get(file);
+      assert.exists(expectedLeads);
+      expect(out).toBe(text.replace("# Title\n\n", `# Title\n\n${expectedLeads.join("\n\n")}\n\n`));
       expect(deriveSkill(file, out, models, leads)).toBe(out);
     }
   });
@@ -478,6 +481,7 @@ describe("lead lines", () => {
     const text = "---\nname: x\n# a YAML comment\n---\n\n# Title\n\nbody\n";
     const once = stampLeadLine(text, "Lead.");
     expect(once).toBe("---\nname: x\n# a YAML comment\n---\n\n# Title\n\nLead.\n\nbody\n");
+    assert.exists(once);
     expect(stampLeadLine(once, "Lead.")).toBe(once);
     expect(stampLeadLine("no heading\n", "Lead.")).toBeNull();
   });
@@ -532,10 +536,15 @@ describe("lead lines", () => {
     const { files } = plan(repoRoot);
     const stubs = Object.keys(files).filter((rel) => rel.startsWith("plugins/pstack/.codex-plugin/prompts/"));
     const pointsAtMapping = (rel) => files[rel].includes("codex-tools.md");
-    const honoured = [codex.preamble, RUNTIMES.find((r) => r.name === "T3").preamble];
+    const t3 = RUNTIMES.find((r) => r.name === "T3");
+    assert.exists(t3);
+    const honoured = [codex.preamble, t3.preamble];
     const carriesPreamble = (rel) => {
       const text = readFileSync(join(repoRoot, `plugins/pstack/skills/${basename(rel, ".md")}/SKILL.md`), "utf8");
-      return honoured.some((line) => text.includes(line));
+      return honoured.some((line) => {
+        assert.exists(line);
+        return text.includes(line);
+      });
     };
     expect(stubs.filter(carriesPreamble).length).toBeGreaterThan(0);
     expect(stubs.filter((rel) => !carriesPreamble(rel)).length).toBeGreaterThan(0);
@@ -563,7 +572,9 @@ describe("effort agents", () => {
   });
 
   test("the poteto variant's description defers to pstack:poteto-agent rather than copying its routing contract", () => {
-    const description = agents[1].text.match(/^description: (.*)$/m)[1];
+    const match = agents[1].text.match(/^description: (.*)$/m);
+    assert.exists(match);
+    const description = match[1];
     expect(description).toContain("in place of `pstack:poteto-agent`");
     expect(description).not.toContain("Routing contract.");
   });
@@ -645,7 +656,7 @@ describe("plan, changes, apply", () => {
     const stale = run("--check");
     expect(stale.status).toBe(1);
     expect(stale.stderr).toContain(
-      `FAIL: generated output is stale; run bun tools/generate.mjs:\n  write: ${STUB}\n  remove: ${STRAY}\n`,
+      `FAIL: generated output is stale; run node tools/generate.mjs:\n  write: ${STUB}\n  remove: ${STRAY}\n`,
     );
     expect(snapshot(root)).toEqual(before);
     expect(run().status).toBe(0);
@@ -714,10 +725,12 @@ describe("plan, changes, apply", () => {
     const outside = scratch("pstack-outside-");
     mkdirSync(join(root, "skills"));
     symlinkSync(outside, join(root, "skills/out"), "dir");
-    for (const intended of [
+    /** @type {import("../tools/generate.mjs").GeneratedPlan[]} */
+    const plans = [
       { files: { "skills/out/a.md": "A" }, ownedDirs: ["skills/out"] },
       { files: { "skills/out/deep/a.md": "A" }, ownedDirs: [] },
-    ]) {
+    ];
+    for (const intended of plans) {
       expect(() => apply(root, intended, quiet)).toThrow("skills/out is a symlink; the generator never writes through one");
     }
     expect(readdirSync(outside)).toEqual([]);
@@ -814,6 +827,8 @@ describe("plan, changes, apply", () => {
     const manifest = "plugins/pstack/.claude-plugin/plugin.json";
     const skill = "plugins/pstack/skills/how/SKILL.md";
     const text = (rel) => readFileSync(join(root, rel), "utf8");
+    const skillLeads = leads.get(skill);
+    assert.exists(skillLeads);
     writeFileSync(
       join(root, manifest),
       JSON.stringify({ ...JSON.parse(text(manifest)), version: "0.0.1", agents: [] }, null, 2) + "\n",
@@ -821,7 +836,7 @@ describe("plan, changes, apply", () => {
     writeFileSync(
       join(root, skill),
       text(skill)
-        .replace(`\n\n${leads.get(skill)[0]}\n`, "\n")
+        .replace(`\n\n${skillLeads[0]}\n`, "\n")
         .replace(/^- how explorer: .*$/m, "- how explorer: stale"),
     );
     const { files } = plan(root);

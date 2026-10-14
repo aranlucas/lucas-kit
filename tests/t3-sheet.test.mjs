@@ -2,7 +2,7 @@
 // catalog. The fixture is a trimmed copy of a real catalog: Claude names its
 // reasoning option `effort`, Codex and Grok name it `reasoningEffort`, and an
 // unauthenticated provider lists models it cannot run.
-import { describe, expect, test } from "bun:test";
+import { assert, describe, expect, test } from "vitest";
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -18,6 +18,7 @@ const script = join(root, "plugins/pstack/skills/setup-pstack/scripts/t3-sheet.m
 const catalogPath = join(root, "tests/fixtures/t3-catalog.json");
 const catalog = JSON.parse(readFileSync(catalogPath, "utf8"));
 const { roles, t3: defaults } = loadModels();
+/** @param {string} text */
 const check = (text, over = catalog) => checkSheet(parseSheet(text), { roles, defaults, catalog: over });
 const PANEL = "interrogate reviewers";
 
@@ -229,6 +230,8 @@ describe("the T3 preamble", () => {
 
   test("replaces another runtime's lead line instead of stacking under it", () => {
     const text = `# Title\n\n${codex.preamble}\n\nBody.\n`;
+    assert.exists(t3);
+    assert.exists(t3.preamble);
     expect(stampLeadLine(text, t3.preamble)).toBe(`# Title\n\n${t3.preamble}\n\nBody.\n`);
   });
 

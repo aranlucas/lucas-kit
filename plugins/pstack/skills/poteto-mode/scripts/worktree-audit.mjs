@@ -99,8 +99,8 @@ const fileId = (path, stat) => {
 // A link is known by the identity stat reports for what it lands on, and by
 // the name realpathSync gives it when it gives one. The name alone misses
 // links: node resolves `..` in a target before the links in it and keeps a
-// firmlink route as written, and bun opens the target to name it, which macOS
-// refuses for its autofs /home. A dangling or looping link (ENOENT, ELOOP)
+// firmlink route as written. Resolving a name can also fail on protected paths
+// such as macOS's autofs /home. A dangling or looping link (ENOENT, ELOOP)
 // spells nothing. When stat fails any other way the route is closed to this
 // process and the link could land anywhere, so the error propagates and the
 // caller leaves the worktree's chat fact unknown.
@@ -138,7 +138,7 @@ export function pathSpellings(path, linksIn = symlinkTargets, stat = statSync) {
   // a filesystem may report one identity for several, and a spare spelling
   // costs a hold where a missed one can cost the worktree.
   const links = ancestors.flatMap((dir) => linksIn(dir).flatMap(([link, { id, name }]) =>
-    onPath.filter((target) => target === name || fileId(target, stat) === id).map((target) => [dir, link, target])));
+    onPath.flatMap((target) => target === name || fileId(target, stat) === id ? [[dir, link, target]] : [])));
   // Spell each directory from the root down, so a link's own directory is
   // already spelled when the link is applied. A link back up to an ancestor of
   // its directory is applied through that directory's resolved spelling only,
@@ -164,7 +164,7 @@ export function pathSpellings(path, linksIn = symlinkTargets, stat = statSync) {
 // stay out: they extend a path by glob or expansion. `?` globs too, but it
 // also ends a question or a URL's path, and a false match costs only a hold.
 const BOUNDARY = new Set(Buffer.from("/\\\"' `:;),|&<>]}?!"));
-const DOT = ".".charCodeAt(0);
+const DOT = ".".codePointAt(0);
 const bounded = (text, at) => at === text.length || BOUNDARY.has(text[at]);
 function mentions(text, needle) {
   for (let at = text.indexOf(needle); at !== -1; at = text.indexOf(needle, at + 1)) {
@@ -338,7 +338,7 @@ export function audit({
   const found = bind(missing, (roots) => {
     for (const root of roots) warn(`warn: ${root} not found; LAST_CHAT column will be empty`);
     if (roots.length) return UNKNOWN;
-    const knownSpellings = new Map([...spellings].filter(([, fact]) => fact.known).map(([path, fact]) => [path, fact.value]));
+    const knownSpellings = new Map([...spellings].flatMap(([path, fact]) => fact.known ? [[path, fact.value]] : []));
     return discover(() => lastChats(transcripts, knownSpellings), scanFailed);
   });
   const chats = new Map(live.map((path) => [

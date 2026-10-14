@@ -2,7 +2,7 @@
 // that quietly matches nothing looks identical to a pass, and that already
 // happened once (the 0.9.10 quad check hunted a retired slug for a whole
 // release), so every check gets a fixture that must trip it.
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "vitest";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";

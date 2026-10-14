@@ -232,11 +232,13 @@ export interface NotFoundOutput {
 export class UserError extends Error {}
 export class UsageError extends UserError {}
 export class NotFoundError extends UserError {
+  public readonly output?: NotFoundOutput;
   public constructor(
     message: string,
-    public readonly output?: NotFoundOutput
+    output?: NotFoundOutput
   ) {
     super(message);
+    this.output = output;
   }
 }
 
@@ -871,8 +873,7 @@ function summarize(
     ledgerVerdicts: countValues(ledgerRows.map((row) => row.verdict)),
     frontierGeneration: currentFrontier.generation,
     openGateIds: gateRows
-      .filter((gate): gate is OpenGate => gate.kind === "open")
-      .map((gate) => gate.id)
+      .flatMap((gate) => gate.kind === "open" ? [gate.id] : [])
       .sort(),
   };
 }

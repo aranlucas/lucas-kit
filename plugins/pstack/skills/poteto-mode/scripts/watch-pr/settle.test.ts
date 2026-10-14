@@ -1,4 +1,4 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it } from "vitest";
 import { main } from "./cli.ts";
 import { WatchDeadline } from "./deadline.ts";
 import { fakeReader, type FakeReaderOptions } from "./fakes.test-helper.ts";
@@ -333,7 +333,7 @@ function graphql(pr: {
   readonly threads?: readonly unknown[];
   readonly reactions?: readonly unknown[];
   readonly readyAt?: string;
-}): unknown {
+}) {
   return {
     data: {
       viewer: { login: "viewer" },
@@ -430,7 +430,7 @@ describe("review activity reader", () => {
     const failure = (() => {
       try {
         parseReviewActivity({
-          ...(graphql({}) as object),
+          ...graphql({}),
           errors: [{ message: "Something went wrong" }],
         });
       } catch (error) {
@@ -438,6 +438,7 @@ describe("review activity reader", () => {
       }
     })();
     expect(failure).toBeInstanceOf(WatcherQueryError);
+    // SAFETY: The preceding toBeInstanceOf matcher throws unless failure is a WatcherQueryError.
     expect((failure as WatcherQueryError).failure).toMatchObject({
       kind: "missing-key",
       retryable: true,

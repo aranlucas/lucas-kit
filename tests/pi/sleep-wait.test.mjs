@@ -1,7 +1,7 @@
 // The sleep rule as a table: each row is a command line and whether it blocks.
 // The last two groups are the rule's known misses and over-blocks; a row that
 // moves between groups is a decision, not a drift.
-import { expect, test } from "bun:test";
+import { expect, test } from "vitest";
 
 import { isForegroundWait } from "../../plugins/pstack/pi/sleep-wait.ts";
 import { useWorld, waitFor } from "./harness.mjs";

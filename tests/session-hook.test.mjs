@@ -1,6 +1,6 @@
 // Each runtime's shipped SessionStart command, run for real: the mandate is
 // injected unless that runtime's model sheet turns it off.
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "vitest";
 import { spawnSync } from "node:child_process";
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";

@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 // Build a skills-only dependency with the root layout pnpm discovers.
 // Stage outside the checkout so packaging never duplicates or edits source skills.
+import { execFileSync } from "node:child_process";
+import { gzipSync, gunzipSync } from "node:zlib";
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join, relative, resolve } from "node:path";
@@ -47,6 +49,25 @@ export function packSkills(root = repoRoot, destination = join(root, "dist")) {
     });
     if (packed.error) throw packed.error;
     if (packed.status !== 0) throw new Error(packed.stdout + packed.stderr);
+    // pnpm pack excludes pnpm-lock.yaml at every depth, even from explicit
+    // manifest files. Skill-bundled CLIs need their exact lock for a frozen
+    // bootstrap. Keep pnpm's manifest/executable handling and add only those
+    // source lockfiles back into the completed archive.
+    const locks = walk(join(staging, "skills"))
+      .filter((file) => basename(file) === "pnpm-lock.yaml")
+      .map((file) => relative(staging, file));
+    if (locks.length) {
+      const additions = join(staging, "lockfiles");
+      for (const file of locks) {
+        const target = join(additions, "package", file);
+        mkdirSync(join(target, ".."), { recursive: true });
+        cpSync(join(staging, file), target);
+      }
+      const tarball = join(staging, "packed.tar");
+      writeFileSync(tarball, gunzipSync(readFileSync(archive)));
+      execFileSync("tar", ["-rf", tarball, "-C", additions, ...locks.map((file) => join("package", file).split("\\").join("/"))]);
+      writeFileSync(archive, gzipSync(readFileSync(tarball)));
+    }
     return archive;
   } finally {
     rmSync(staging, { recursive: true, force: true });

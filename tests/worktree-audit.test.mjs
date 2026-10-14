@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "vitest";
 import { execFileSync, spawnSync } from "node:child_process";
 import { chmodSync, mkdirSync, mkdtempSync, realpathSync, rmSync, statSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
@@ -9,7 +9,7 @@ import { defaultSettings, PSTACK_STATE_DIR } from "../plugins/pstack/pi/config.t
 import { audit, classify, defaultTranscriptRoots, duSize, lastChats, pathSpellings, symlinkTargets } from "../plugins/pstack/skills/poteto-mode/scripts/worktree-audit.mjs";
 import { removeDuring } from "./remove-during.mjs";
 
-const script = join(import.meta.dir, "../plugins/pstack/skills/poteto-mode/scripts/worktree-audit.mjs");
+const script = join(import.meta.dirname, "../plugins/pstack/skills/poteto-mode/scripts/worktree-audit.mjs");
 // node's ESM loader takes a file URL, not a drive-lettered path.
 const scriptUrl = pathToFileURL(script).href;
 const noNode = spawnSync("node", ["--version"]).status !== 0;

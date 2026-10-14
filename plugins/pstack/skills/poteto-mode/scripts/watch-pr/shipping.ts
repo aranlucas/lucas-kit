@@ -134,11 +134,14 @@ function data(value: unknown): Record<string, unknown> {
 }
 
 export class GhShippingService implements ShippingService {
+  private readonly execute: (
+    argv: readonly [string, ...string[]]
+  ) => Promise<unknown>;
   constructor(
-    private readonly execute: (
-      argv: readonly [string, ...string[]]
-    ) => Promise<unknown>
-  ) {}
+    execute: (argv: readonly [string, ...string[]]) => Promise<unknown>
+  ) {
+    this.execute = execute;
+  }
 
   async inspect(context: PrContext): Promise<LandingRecord> {
     const response = data(

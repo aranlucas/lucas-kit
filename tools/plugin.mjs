@@ -4,5 +4,7 @@
 export const PLUGIN = "plugins/pstack";
 export const SKILLS = `${PLUGIN}/skills`;
 
-export const code = (s) => `\`${s}\``;
+/** @param {string} identifier */
+export const code = (identifier) => `\`${identifier}\``;
+/** @param {readonly string[]} models */
 export const codeList = (models) => models.map(code).join(", ");

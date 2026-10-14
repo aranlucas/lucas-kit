@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { expect, test } from "vitest";
 import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { once } from "node:events";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
@@ -94,9 +94,9 @@ test("a row is appended when perl is not installed", () => {
     const log = join(dir, "log.tsv");
     const bin = join(dir, "bin");
     mkdirSync(bin);
-    for (const tool of ["dirname", "date", "tr"]) symlinkSync(Bun.which(tool), join(bin, tool));
+    for (const tool of ["dirname", "date", "tr"]) symlinkSync(execFileSync("which", [tool], { encoding: "utf8" }).trim(), join(bin, tool));
     const cells = ["phase", "decision", "why", "evidence", "result"];
-    execFileSync(Bun.which("bash"), [logScript, log, ...cells], { env: { PATH: bin } });
+    execFileSync(execFileSync("which", ["bash"], { encoding: "utf8" }).trim(), [logScript, log, ...cells], { env: { PATH: bin } });
     const rows = readFileSync(log, "utf8").trimEnd().split("\n").slice(1).map((line) => line.split("\t"));
     expect(rows.map((row) => row.slice(1))).toEqual([cells]);
   } finally {

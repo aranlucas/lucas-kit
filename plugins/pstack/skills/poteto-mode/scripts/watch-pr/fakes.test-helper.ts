@@ -108,11 +108,11 @@ export function fakeReader(
     async pullRequest(requested) {
       calls.push("pullRequest");
       reads += 1;
-      const facts = {
+      let facts = {
         ...defaults,
         ...options.facts,
-        ...(reads > 1 ? options.factsOnReread : {}),
       };
+      if (reads > 1) facts = { ...facts, ...options.factsOnReread };
       return parsePullRequest(
         {
           ...facts,

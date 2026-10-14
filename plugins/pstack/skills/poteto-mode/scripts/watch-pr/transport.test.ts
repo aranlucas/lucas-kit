@@ -1,4 +1,4 @@
-import { afterEach, expect, it } from "bun:test";
+import { afterEach, expect, it } from "vitest";
 import { spawnSync } from "node:child_process";
 import {
   chmodSync,
@@ -74,7 +74,7 @@ console.log(JSON.stringify(value));
   const entry = join(dir, "entry.ts");
   writeFileSync(
     entry,
-    `import { main } from ${JSON.stringify(join(import.meta.dir, "cli.ts"))}; process.exitCode = await main(process.argv.slice(2));\n`
+    `import { main } from ${JSON.stringify(join(import.meta.dirname, "cli.ts"))}; process.exitCode = await main(process.argv.slice(2));\n`
   );
   const callsFile = join(dir, "calls.jsonl");
   writeFileSync(callsFile, "");
@@ -94,6 +94,7 @@ console.log(JSON.stringify(value));
       },
     }
   );
+  // SAFETY: This fixture alone writes each log line as JSON.stringify(process.argv.slice(2)), whose entries are strings.
   return {
     ...result,
     elapsed: performance.now() - started,
@@ -137,6 +138,7 @@ it("keeps a fork main branch distinct from destination main during stack discove
   });
 });
 
+// SAFETY: Parsed verdicts are widened to unknown; this boundary asserts no shape and leaves checks to callers.
 const verdicts = (stdout: string): unknown[] =>
   stdout
     .trim()

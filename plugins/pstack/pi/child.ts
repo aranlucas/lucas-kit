@@ -13,12 +13,22 @@ const CLOSE_AFTER_EXIT_MS = 2000;
 // field is read, and a line that fits none is skipped: one that lacks a field
 // must not end the agent.
 const answerLine = Type.Object({ type: Type.Literal("response"), id: Type.String() });
-const responseSchema = Type.Object({ success: Type.Boolean(), error: Type.Optional(Type.String()) });
+const responseSchema = Type.Object({
+  success: Type.Boolean(),
+  error: Type.Optional(Type.String()),
+});
 type Answer = Static<typeof responseSchema>;
-const handledPrompt = Type.Object({ command: Type.Literal("prompt"), data: Type.Object({ disposition: Type.Literal("handled") }) });
+const handledPrompt = Type.Object({
+  command: Type.Literal("prompt"),
+  data: Type.Object({ disposition: Type.Literal("handled") }),
+});
 const assistantEndLine = Type.Object({
   type: Type.Literal("message_end"),
-  message: Type.Object({ role: Type.Literal("assistant"), content: Type.Array(Type.Unknown()), stopReason: Type.Optional(Type.Unknown()) }),
+  message: Type.Object({
+    role: Type.Literal("assistant"),
+    content: Type.Array(Type.Unknown()),
+    stopReason: Type.Optional(Type.Unknown()),
+  }),
 });
 const textPart = Type.Object({ type: Type.Literal("text"), text: Type.String() });
 const failedMessage = Type.Object({ errorMessage: Type.String() });
@@ -27,7 +37,12 @@ const settledLine = Type.Object({ type: Type.Literal("agent_settled") });
 const dialogLine = Type.Object({
   type: Type.Literal("extension_ui_request"),
   id: Type.String(),
-  method: Type.Union([Type.Literal("select"), Type.Literal("confirm"), Type.Literal("input"), Type.Literal("editor")]),
+  method: Type.Union([
+    Type.Literal("select"),
+    Type.Literal("confirm"),
+    Type.Literal("input"),
+    Type.Literal("editor"),
+  ]),
 });
 
 export interface ChildExit {
@@ -42,8 +57,7 @@ export interface ChildExit {
 
 function assistantText(content: unknown[]): string {
   return content
-    .filter((part) => Value.Check(textPart, part))
-    .map((part) => part.text)
+    .flatMap((part) => (Value.Check(textPart, part) ? [part.text] : []))
     .join("\n")
     .trim();
 }
@@ -68,9 +82,18 @@ export class PiChild {
   private errorMessage = "";
   private stderr = "";
 
-  constructor(command: string, args: string[], opts: { cwd: string; exitGraceMs: number }, prompt: string) {
+  constructor(
+    command: string,
+    args: string[],
+    opts: { cwd: string; exitGraceMs: number },
+    prompt: string,
+  ) {
     this.exitGraceMs = opts.exitGraceMs;
-    this.proc = spawn(command, args, { cwd: opts.cwd, detached: true, stdio: ["pipe", "pipe", "pipe"] });
+    this.proc = spawn(command, args, {
+      cwd: opts.cwd,
+      detached: true,
+      stdio: ["pipe", "pipe", "pipe"],
+    });
     this.pid = this.proc.pid;
     this.proc.stdin.on("error", () => {});
     const stdout = lineSplitter((line) => this.onLine(line));
@@ -89,7 +112,13 @@ export class PiChild {
         if (spawnError) this.errorMessage = spawnError.message;
         for (const settle of this.pending.values()) settle(undefined);
         this.pending.clear();
-        resolve({ exitCode: spawnError ? null : exitCode, settled: this.settled, finalText: this.finalText, errorMessage: this.errorMessage, stderr: this.stderr });
+        resolve({
+          exitCode: spawnError ? null : exitCode,
+          settled: this.settled,
+          finalText: this.finalText,
+          errorMessage: this.errorMessage,
+          stderr: this.stderr,
+        });
       };
       this.proc.on("error", finish);
       // A process holding the pipes open after pi exited must not keep the
@@ -114,7 +143,8 @@ export class PiChild {
       if (!response) return;
       if (!response.success) this.errorMessage = response.error ?? "pi rejected the prompt";
       else if (Value.Check(handledPrompt, response)) {
-        this.errorMessage = "pi consumed the prompt as an extension command, so no agent run started. Send the task as plain text.";
+        this.errorMessage =
+          "pi consumed the prompt as an extension command, so no agent run started. Send the task as plain text.";
       } else return;
       this.close();
     });
@@ -132,11 +162,14 @@ export class PiChild {
   // decided: the settle can follow in the same chunk of output.
   steer(message: string): Promise<{ response: Answer | undefined; taken: boolean }> {
     return new Promise((resolve) =>
-      this.send({ type: "steer", message }, (response) => resolve({ response, taken: response?.success === true && !this.settled })),
+      this.send({ type: "steer", message }, (response) =>
+        resolve({ response, taken: response?.success === true && !this.settled }),
+      ),
     );
   }
 
   private send(command: RpcCommand, onResponse: (response: Answer | undefined) => void): void {
+    // oxlint-disable-next-line unicorn/no-useless-undefined -- The required RPC callback receives one response argument, including after exit.
     if (!this.open) return onResponse(undefined);
     const id = `c${++this.nextId}`;
     this.pending.set(id, onResponse);
@@ -188,7 +221,10 @@ export class PiChild {
     }
     if (Value.Check(answerLine, parsed)) {
       // A response that is not pi's shape still answers its command, as a failure.
-      const malformed = { success: false, error: `malformed response: ${JSON.stringify(parsed).slice(0, 200)}` };
+      const malformed = {
+        success: false,
+        error: `malformed response: ${JSON.stringify(parsed).slice(0, 200)}`,
+      };
       this.pending.get(parsed.id)?.(Value.Check(responseSchema, parsed) ? parsed : malformed);
       this.pending.delete(parsed.id);
     } else if (Value.Check(assistantEndLine, parsed)) {
@@ -198,19 +234,24 @@ export class PiChild {
       const text = assistantText(message.content);
       if (text) this.finalText = text;
       if (Value.Check(failedMessage, message)) this.errorMessage = message.errorMessage;
-      else this.errorMessage = text ? "" : `(the last assistant message had no text; stop reason: ${String(message.stopReason)})`;
+      else
+        this.errorMessage = text
+          ? ""
+          : `(the last assistant message had no text; stop reason: ${String(message.stopReason)})`;
     } else if (Value.Check(settledLine, parsed)) {
       this.settled = true;
       this.close();
     } else if (Value.Check(dialogLine, parsed)) {
-      this.proc.stdin.write(`${JSON.stringify({ type: "extension_ui_response", id: parsed.id, cancelled: true })}\n`);
+      this.proc.stdin.write(
+        `${JSON.stringify({ type: "extension_ui_response", id: parsed.id, cancelled: true })}\n`,
+      );
     }
   }
 }
 
 // Splits pi's stdout into lines on LF only: a Unicode line separator is valid
 // inside a JSON string.
-export function lineSplitter(onLine: (line: string) => void): { write(chunk: Buffer | string): void; end(): void } {
+export function lineSplitter(onLine: (line: string) => void) {
   const decoder = new StringDecoder("utf8");
   let buffered = "";
   const feed = (text: string) => {
@@ -220,7 +261,7 @@ export function lineSplitter(onLine: (line: string) => void): { write(chunk: Buf
     for (const line of lines) onLine(line);
   };
   return {
-    write: (chunk) => feed(decoder.write(chunk)),
+    write: (chunk: Buffer | string) => feed(decoder.write(chunk)),
     end: () => {
       feed(decoder.end());
       if (buffered) onLine(buffered);

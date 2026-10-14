@@ -15,6 +15,7 @@
         "docs/",
         "plugin.json",
         "skills/make-bot-ui/",
+        "skills/poteto-mode/scripts/bun.lock",
         "skills/poteto-mode/scripts/worktree-audit.sh"
       ]
     },

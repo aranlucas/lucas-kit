@@ -175,7 +175,7 @@ Install dependencies for the workflows you use:
 | Dependency | When you need it |
 | --- | --- |
 | GitHub CLI, `gh` | PR monitoring and shipping. Authenticate with `gh auth login`. |
-| Bun | The bundled `watch-pr` and `orch` scripts. Their bootstrap installs script dependencies on first run. |
+| Node.js 24.2+ and pnpm 12.11.0 | The bundled `watch-pr` and `orch` scripts. Their bootstrap installs locked production dependencies on first run. |
 | Graphite CLI, `gt` | The Orchestrate playbook and `orch` stack frontier. Shipping and autopilot playbooks use `gh` or Origin's CLI when available. |
 | `plugin-dev` | Claude Code skill-authoring guidance used by `automate-me`, `reflect`, and `poteto-mode`. |
 
@@ -220,7 +220,7 @@ The [generator](../tools/generate.mjs) updates versions, model defaults, Codex p
 
 [Documentation fact tests](../tests/readme-facts.test.mjs) check the skill counts and upstream pin. The table parser requires the header `| command | use it when |`.
 
-Run the generator and repository tests through pnpm (Bun remains their runtime):
+Run the generator and repository tests through pnpm with Node.js 24 and Vitest:
 
 ```shell
 pnpm install --frozen-lockfile
@@ -230,7 +230,7 @@ pnpm test
 
 The install step reads the root `pnpm-lock.yaml` and fetches `typebox`, which the Pi extension and its tests import.
 
-CI also checks shell scripts, workflows, Markdown, relative links, and the bundled Bun tools. See [local checks](../CONTRIBUTING.md#things-that-will-fail-ci) for commands and [release instructions](../CONTRIBUTING.md#releasing) for versioning and the live Claude Code command check.
+CI also checks shell scripts, workflows, Markdown, relative links, and the bundled Node.js tools. See [local checks](../CONTRIBUTING.md#things-that-will-fail-ci) for commands and [release instructions](../CONTRIBUTING.md#releasing) for versioning and the live Claude Code command check.
 
 ### Port scope and attribution
 

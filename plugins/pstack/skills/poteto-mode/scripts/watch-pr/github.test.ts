@@ -1,4 +1,4 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it } from "vitest";
 import { WatchDeadline } from "./deadline.ts";
 import {
   ChecksUnavailable,
@@ -39,6 +39,60 @@ function reported(read: CheckRead): ReportedChecks {
 
 const numbers = (stack: readonly PrContext[]): number[] =>
   stack.map((pr) => Number(pr.number));
+
+describe("missing and invalid query values", () => {
+  it("omits rawValue for a missing property", () => {
+    try {
+      parseFastCheck({ state: "SUCCESS", bucket: "pass" });
+      throw new Error("expected parser to throw");
+    } catch (error) {
+      if (!(error instanceof WatcherQueryError)) throw error;
+      expect(error.failure).toEqual({
+        kind: "missing-key",
+        retryable: true,
+        detail: "missing name",
+      });
+    }
+  });
+
+  it("keeps detail serialization before rawValue serialization", () => {
+    let serializations = 0;
+    const invalidName = {
+      toJSON() {
+        serializations += 1;
+        return serializations === 1 ? "detail" : "raw";
+      },
+    };
+    try {
+      parseFastCheck({ name: invalidName, state: "SUCCESS", bucket: "pass" });
+      throw new Error("expected parser to throw");
+    } catch (error) {
+      if (!(error instanceof WatcherQueryError)) throw error;
+      expect(error.failure).toEqual({
+        kind: "missing-key",
+        retryable: true,
+        detail: 'invalid name: "detail"',
+        rawValue: '"raw"',
+      });
+      expect(serializations).toBe(2);
+    }
+  });
+
+  it("reads fake replacement facts only after the first request", async () => {
+    let rereads = 0;
+    const reader = fakeReader({
+      facts: { headRefOid: "first" },
+      get factsOnReread() {
+        rereads += 1;
+        return { headRefOid: "replacement" };
+      },
+    });
+    expect((await reader.pullRequest(context)).headRefOid).toBe("first");
+    expect(rereads).toBe(0);
+    expect((await reader.pullRequest(context)).headRefOid).toBe("replacement");
+    expect(rereads).toBe(1);
+  });
+});
 
 describe("checks fallback chain", () => {
   it("uses a non-empty fast-path result without a rollup query", async () => {
@@ -441,6 +495,99 @@ it("annotates Bugbot threads with distinct review-pass counts", () => {
   expect(threads).toHaveLength(2);
   expect(threads.map((thread) => thread.isBugbot)).toEqual([true, true]);
   expect(threads.map((thread) => thread.bugbotReviewPasses)).toEqual([3, 3]);
+});
+
+describe("review thread read ordering", () => {
+  it("finishes every resolved predicate before reading selected thread ids", () => {
+    const reads: string[] = [];
+    let firstId = "before-later-predicate";
+    const threads = [
+      {
+        get firstComment() {
+          reads.push("first.comment");
+          return null;
+        },
+        get resolved() {
+          reads.push("first.resolved");
+          return false;
+        },
+        get id() {
+          reads.push("first.id");
+          return firstId;
+        },
+      },
+      {
+        get firstComment() {
+          reads.push("later.comment");
+          return null;
+        },
+        get resolved() {
+          reads.push("later.resolved");
+          firstId = "after-later-predicate";
+          return false;
+        },
+        get id() {
+          reads.push("later.id");
+          return "later";
+        },
+      },
+    ];
+
+    expect(buildReviewThreads(threads)).toEqual([
+      {
+        id: "after-later-predicate",
+        firstComment: null,
+        isBugbot: false,
+        bugbotReviewPasses: 0,
+      },
+      {
+        id: "later",
+        firstComment: null,
+        isBugbot: false,
+        bugbotReviewPasses: 0,
+      },
+    ]);
+    expect(reads).toEqual([
+      "first.comment",
+      "later.comment",
+      "first.resolved",
+      "later.resolved",
+      "first.id",
+      "first.comment",
+      "later.id",
+      "later.comment",
+    ]);
+  });
+
+  it("throws a later predicate failure before an earlier mapping failure", () => {
+    const reads: string[] = [];
+    const predicateFailure = new Error("later resolved getter failed");
+    const mappingFailure = new Error("earlier id getter failed");
+    const threads = [
+      {
+        firstComment: null,
+        get resolved() {
+          reads.push("first.resolved");
+          return false;
+        },
+        get id(): string {
+          reads.push("first.id");
+          throw mappingFailure;
+        },
+      },
+      {
+        id: "later",
+        firstComment: null,
+        get resolved(): boolean {
+          reads.push("later.resolved");
+          throw predicateFailure;
+        },
+      },
+    ];
+
+    expect(() => buildReviewThreads(threads)).toThrow(predicateFailure);
+    expect(reads).toEqual(["first.resolved", "later.resolved"]);
+  });
 });
 
 describe("review thread pagination", () => {

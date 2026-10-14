@@ -1,4 +1,6 @@
-import { afterEach, describe, expect, it } from "bun:test";
+import { afterEach, describe, expect, it } from "vitest";
+import { spawn, spawnSync } from "node:child_process";
+import { text as streamText } from "node:stream/consumers";
 import {
   chmod,
   mkdir,
@@ -22,7 +24,7 @@ import {
   type Store,
 } from "./store.ts";
 
-const SCRIPT = join(import.meta.dir, "orch.ts");
+const SCRIPT = join(import.meta.dirname, "orch.ts");
 const directories: string[] = [];
 const handles: Store[] = [];
 
@@ -64,8 +66,8 @@ function git({
   args: readonly string[];
   repo: string;
 }): string {
-  const result = Bun.spawnSync(["git", "-C", repo, ...args]);
-  if (result.exitCode !== 0) {
+  const result = spawnSync("git", ["-C", repo, ...args], { encoding: "utf8" });
+  if (result.error || result.status !== 0) {
     throw new Error(
       `git ${args.join(" ")} failed: ${result.stderr.toString()}`
     );
@@ -158,16 +160,32 @@ function runCli(
   args: readonly string[],
   env?: Readonly<Record<string, string | undefined>>
 ): RunResult {
-  const result = Bun.spawnSync([process.execPath, SCRIPT, ...args], { env });
+  const result = spawnSync(process.execPath, [SCRIPT, ...args], { env, encoding: "utf8" });
   return {
-    code: result.exitCode,
+    code: result.status ?? 1,
     stdout: result.stdout.toString(),
     stderr: result.stderr.toString(),
   };
 }
 
+function spawnTestProcess(command: string, args: string[]) {
+  const child = spawn(command, args, { stdio: ["ignore", "ignore", "pipe"] });
+  const exited = new Promise<number | null>((resolve, reject) => {
+    child.once("error", reject);
+    child.once("close", resolve);
+  });
+  const stderrText = streamText(child.stderr);
+  return {
+    get pid() { return child.pid!; },
+    get exitCode() { return child.exitCode; },
+    get signalCode() { return child.signalCode; },
+    exited,
+    stderrText,
+  };
+}
+
 async function plantStaleLock(directory: string): Promise<number> {
-  const exited = Bun.spawn(["true"]);
+  const exited = spawnTestProcess("true", []);
   await exited.exited;
   await writeFile(join(directory, ".orch.lock"), `${exited.pid}\n`);
   return exited.pid;
@@ -193,6 +211,8 @@ function spawnWriter({
   killAfterLockCall?: number;
 }) {
   const script = `
+import { createRequire, syncBuiltinESMExports } from "node:module";
+const require = createRequire(import.meta.url);
 const { existsSync, rmSync, writeFileSync } = require("node:fs");
 const promises = require("node:fs/promises");
 const flag = (suffix) => ${JSON.stringify(`${flags}/${name}.`)} + suffix;
@@ -228,7 +248,8 @@ for (const [call, run] of Object.entries(promises)) {
     }
   };
 }
-const { openStore } = await import(${JSON.stringify(join(import.meta.dir, "store.ts"))});
+syncBuiltinESMExports();
+const { openStore } = await import(${JSON.stringify(join(import.meta.dirname, "store.ts"))});
 const store = openStore(${JSON.stringify(directory)}, { force: ${force} });
 ${before}
 try {
@@ -239,7 +260,7 @@ try {
 }
 await store.close();
 `;
-  return Bun.spawn([process.execPath, "-e", script], { stderr: "pipe" });
+  return spawnTestProcess(process.execPath, ["--input-type=module", "-e", script]);
 }
 
 async function readFlags(
@@ -401,7 +422,7 @@ describe("Store", () => {
       report: "reports/u1.md",
     });
     expect(first.pointer).toMatchObject({ unit: "u1", status: "done" });
-    expect(first.filename).toEndWith(".tsv");
+    expect(first.filename.endsWith(".tsv")).toBe(true);
     await store.inbox.push({
       agent: "worker-2",
       unit: "u2",
@@ -423,7 +444,7 @@ describe("Store", () => {
 
   it("replaces a stale lock whose holder pid is dead", async () => {
     const { directory } = await initializedStore();
-    const exited = Bun.spawn(["true"]);
+    const exited = spawnTestProcess("true", []);
     await exited.exited;
     await writeFile(join(directory, ".orch.lock"), `${exited.pid}\n`);
 
@@ -446,7 +467,7 @@ describe("Store", () => {
   it("lets only one of two writers racing for a stale lock replace it", async () => {
     const { directory, store } = await initializedStore();
     await store.close();
-    const exited = Bun.spawn(["true"]);
+    const exited = spawnTestProcess("true", []);
     await exited.exited;
     await writeFile(join(directory, ".orch.lock"), `${exited.pid}\n`);
     const flags = await makeDirectory();
@@ -460,7 +481,7 @@ describe("Store", () => {
       beforeTakeover: string;
       beforeClose: string;
     }) => `
-const { openStore } = await import(${JSON.stringify(join(import.meta.dir, "store.ts"))});
+const { openStore } = await import(${JSON.stringify(join(import.meta.dirname, "store.ts"))});
 const { existsSync, readFileSync, writeFileSync } = await import("node:fs");
 const flag = (suffix) => ${JSON.stringify(`${flags}/`)} + suffix;
 const spin = (ready) => {
@@ -493,7 +514,7 @@ ${beforeClose}
 await store.close();
 `;
     const run = (script: string) =>
-      Bun.spawn([process.execPath, "-e", script], { stderr: "pipe" });
+      spawnTestProcess(process.execPath, ["--input-type=module", "-e", script]);
     const a = run(
       worker({
         name: "A",
@@ -510,8 +531,8 @@ await store.close();
       })
     );
     expect(await Promise.all([a.exited, b.exited])).toEqual([0, 0]);
-    expect(await new Response(a.stderr).text()).toBe("");
-    expect(await new Response(b.stderr).text()).toBe("");
+    expect(await a.stderrText).toBe("");
+    expect(await b.stderrText).toBe("");
 
     const outcomes = (await readdir(flags))
       .filter((name) => /\.(held|refused)$/.test(name))
@@ -574,8 +595,8 @@ await store.close();
       before: `spin(() => peer("A.replacing"));`,
     });
     expect(await Promise.all([a.exited, f.exited])).toEqual([0, 0]);
-    expect(await new Response(a.stderr).text()).toBe("");
-    expect(await new Response(f.stderr).text()).toBe("");
+    expect(await a.stderrText).toBe("");
+    expect(await f.stderrText).toBe("");
 
     expect(await readFlags(flags)).toEqual({
       "A.replacing": "",
@@ -608,8 +629,8 @@ await store.close();
       before: `spin(() => peer("A.releasing"));`,
     });
     expect(await Promise.all([a.exited, f.exited])).toEqual([0, 0]);
-    expect(await new Response(a.stderr).text()).toBe("");
-    expect(await new Response(f.stderr).text()).toBe("");
+    expect(await a.stderrText).toBe("");
+    expect(await f.stderrText).toBe("");
 
     expect(await readFlags(flags)).toEqual({
       "A.releasing": "",
@@ -679,8 +700,8 @@ promises.readdir = async (path) => {
     spin(() => peer("B.held") || peer("B.refused"));`,
     });
     expect(await Promise.all([b.exited, c.exited])).toEqual([0, 0]);
-    expect(await new Response(b.stderr).text()).toBe("");
-    expect(await new Response(c.stderr).text()).toBe("");
+    expect(await b.stderrText).toBe("");
+    expect(await c.stderrText).toBe("");
 
     expect(await readFlags(flags)).toEqual({
       "B.saw-dead-claimant": "",
@@ -708,7 +729,7 @@ promises.readdir = async (path) => {
     writeFileSync(flag("lock-gone"), "");`,
     });
     expect(await writer.exited).toBe(0);
-    expect(await new Response(writer.stderr).text()).toBe("");
+    expect(await writer.stderrText).toBe("");
     expect(await readFlags(flags)).toEqual({ "A.held": "", "A.lock-gone": "" });
     expect(await lockFiles(directory)).toEqual([]);
   });
@@ -736,7 +757,7 @@ promises.readdir = async (path) => {
         });
         await writer.exited;
         if (writer.signalCode !== "SIGKILL") {
-          expect(await new Response(writer.stderr).text()).toBe("");
+          expect(await writer.stderrText).toBe("");
           expect(writer.exitCode).toBe(0);
           break;
         }
@@ -773,7 +794,7 @@ promises.readdir = async (path) => {
     await rm(lock);
     const writer = spawnWriter({ directory, flags, name: "A", patch });
     expect(await writer.exited).toBe(0);
-    expect(await new Response(writer.stderr).text()).toBe("");
+    expect(await writer.stderrText).toBe("");
     expect(await readFlags(flags)).toMatchObject({ "A.held": "" });
     expect(await lockFiles(directory)).toEqual([]);
   });
@@ -812,7 +833,7 @@ promises.readFile = async (path, ...rest) => {
 };`,
     });
     expect(await writer.exited).toBe(0);
-    expect(await new Response(writer.stderr).text()).toBe("");
+    expect(await writer.stderrText).toBe("");
     expect(await readFlags(flags)).toEqual({
       "A.rival-released": "",
       "A.held": "",
@@ -1290,7 +1311,7 @@ fi
     );
     await writeFile(
       join(directory, "ledger.tsv"),
-      "pr\tsha\tverdict\tevidence\tverifier\tts\n7\tabc\tunit-test-verified\t'bun test' passed\t\t2026-01-01T00:00:00.000Z\n"
+      "pr\tsha\tverdict\tevidence\tverifier\tts\n7\tabc\tunit-test-verified\t'pnpm test' passed\t\t2026-01-01T00:00:00.000Z\n"
     );
 
     const units = [
@@ -1300,7 +1321,7 @@ fi
     ];
     expect(await store.units.list()).toMatchObject(units);
     expect(await store.ledger.check({ pr: 7, sha: "abc" })).toMatchObject({
-      evidence: "'bun test' passed",
+      evidence: "'pnpm test' passed",
     });
 
     await store.units.set({ id: "'foo", state: "done" });

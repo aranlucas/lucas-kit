@@ -1,10 +1,11 @@
-import { describe, expect, test } from "bun:test";
+import { parse as parseYaml } from "yaml";
+import { describe, expect, test } from "vitest";
 import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-const workflow = Bun.YAML.parse(readFileSync(new URL("../.github/workflows/ci.yml", import.meta.url), "utf8"));
+const workflow = parseYaml(readFileSync(new URL("../.github/workflows/ci.yml", import.meta.url), "utf8"));
 const step = workflow.jobs.forks.steps.find(({ name }) => name === "Check every fork from upstream is declared");
 
 // GitHub runs a step body as `bash -e <file>`. The pnpm on the path is a stub
@@ -32,7 +33,7 @@ function runStep(upstream, failing = "") {
 
 const pins = JSON.stringify({ components: { a: { sha: "111" }, b: { sha: "222" } } });
 
-describe.skipIf(!Bun.which("jq"))("the fork check", () => {
+describe.skipIf(spawnSync("jq", ["--version"]).status !== 0)("the fork check", () => {
   test("syncs every pinned component and passes when each sync passes", () => {
     expect(runStep(pins)).toEqual({ passed: true, stdout: "", synced: ["a 111", "b 222"] });
   });

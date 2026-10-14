@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, afterEach, assert, beforeAll, describe, expect, test } from "vitest";
 import { execFileSync, spawnSync } from "node:child_process";
 import {
   chmodSync,
@@ -30,7 +30,56 @@ import {
   syncComponent,
 } from "../tools/sync.mjs";
 
-const RULES = parseSubstitutions(JSON.parse(readFileSync(join(import.meta.dir, "../tools/substitutions.json"), "utf8")));
+/**
+ * @param {unknown} value
+ * @returns {value is import("../tools/sync.mjs").SubstitutionRule}
+ */
+function isRuleFixture(value) {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    "key" in value &&
+    typeof value.key === "string" &&
+    "match" in value &&
+    (typeof value.match === "string" || value.match instanceof RegExp) &&
+    "files" in value &&
+    (value.files === null || value.files instanceof RegExp) &&
+    "replacement" in value &&
+    typeof value.replacement === "string"
+  );
+}
+
+/**
+ * @param {unknown} value
+ * @returns {value is import("../tools/sync.mjs").DenylistEntry}
+ */
+function isDenylistFixture(value) {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    (!("token" in value) || typeof value.token === "string") &&
+    (!("regex" in value) || typeof value.regex === "string") &&
+    "hint" in value &&
+    typeof value.hint === "string"
+  );
+}
+
+/** @type {unknown} */
+const parsedRules = parseSubstitutions(
+  JSON.parse(readFileSync(join(import.meta.dirname, "../tools/substitutions.json"), "utf8")),
+);
+assert(parsedRules !== null && typeof parsedRules === "object");
+assert(
+  "substitutions" in parsedRules &&
+    Array.isArray(parsedRules.substitutions) &&
+    parsedRules.substitutions.every(isRuleFixture),
+);
+assert(
+  "denylist" in parsedRules &&
+    Array.isArray(parsedRules.denylist) &&
+    parsedRules.denylist.every(isDenylistFixture),
+);
+const RULES = { substitutions: parsedRules.substitutions, denylist: parsedRules.denylist };
 
 const fixtures = [];
 afterEach(() => {
@@ -40,7 +89,10 @@ afterEach(() => {
 // Bun's child_process reads the environment at startup unless `env` is passed,
 // so each spawn here passes process.env.
 const gitConfigDir = mkdtempSync(join(tmpdir(), "sync-gitconfig-"));
-const savedGitEnv = { GIT_CONFIG_GLOBAL: process.env.GIT_CONFIG_GLOBAL, GIT_CONFIG_NOSYSTEM: process.env.GIT_CONFIG_NOSYSTEM };
+const savedGitEnv = {
+  GIT_CONFIG_GLOBAL: process.env.GIT_CONFIG_GLOBAL,
+  GIT_CONFIG_NOSYSTEM: process.env.GIT_CONFIG_NOSYSTEM,
+};
 beforeAll(() => {
   writeFileSync(join(gitConfigDir, "gitconfig"), "");
   process.env.GIT_CONFIG_GLOBAL = join(gitConfigDir, "gitconfig");
@@ -83,7 +135,9 @@ describe("applySubstitutions", () => {
       "Use the `Task` tool, then AskQuestion. Skills live in .cursor/skills/.",
       RULES.substitutions,
     );
-    expect(text).toBe("Use the `Agent` tool, then AskUserQuestion. Skills live in .claude/skills/.");
+    expect(text).toBe(
+      "Use the `Agent` tool, then AskUserQuestion. Skills live in .claude/skills/.",
+    );
     expect(counts.get("AskQuestion")).toBe(1);
   });
 
@@ -110,7 +164,7 @@ describe("applySubstitutions", () => {
         "Drive via the relevant control skill and through its control skill.",
         "<control skill path> and the control skill's commands",
         "Multiple `Task` calls in the Task tool.",
-        "on \"restart Cursor\"",
+        'on "restart Cursor"',
       ].join("\n"),
       RULES.substitutions,
     );
@@ -121,7 +175,7 @@ describe("applySubstitutions", () => {
         "Drive via the relevant driver skill and through its driver skill.",
         "<driver skill path> and the driver skill's commands",
         "Multiple `Agent` calls in the `Agent` tool.",
-        "on \"restart Claude Code\"",
+        'on "restart Claude Code"',
       ].join("\n"),
     );
   });
@@ -129,16 +183,20 @@ describe("applySubstitutions", () => {
   test("a model default points at the Models section that owns the file, whatever the slug", () => {
     const line = (slug) => `your configured hillclimb model (default \`${slug}\`)`;
     for (const slug of ["grok-4.7-xhigh-fast", "claude-fable-5-1-thinking-max", "gpt-6-sol-max"]) {
-      expect(applySubstitutions(line(slug), RULES.substitutions, "skills/poteto-mode/playbooks/hillclimb.md").text).toBe(
-        "your configured hillclimb model (default in poteto-mode's Models section)",
-      );
-      expect(applySubstitutions(line(slug), RULES.substitutions, "skills/reflect/SKILL.md").text).toBe(
-        "your configured hillclimb model (default in [Models](#models))",
-      );
+      expect(
+        applySubstitutions(
+          line(slug),
+          RULES.substitutions,
+          "skills/poteto-mode/playbooks/hillclimb.md",
+        ).text,
+      ).toBe("your configured hillclimb model (default in poteto-mode's Models section)");
+      expect(
+        applySubstitutions(line(slug), RULES.substitutions, "skills/reflect/SKILL.md").text,
+      ).toBe("your configured hillclimb model (default in [Models](#models))");
     }
-    expect(applySubstitutions("(default `true`)", RULES.substitutions, "skills/reflect/SKILL.md").text).toBe(
-      "(default `true`)",
-    );
+    expect(
+      applySubstitutions("(default `true`)", RULES.substitutions, "skills/reflect/SKILL.md").text,
+    ).toBe("(default `true`)");
   });
 
   test("every rule's replacement is free of the denylist", () => {
@@ -150,7 +208,9 @@ describe("applySubstitutions", () => {
   test("no rule rewrites another rule's output", () => {
     for (const rel of ["skills/x/SKILL.md", "skills/poteto-mode/playbooks/x.md"]) {
       for (const rule of RULES.substitutions) {
-        expect(applySubstitutions(rule.replacement, RULES.substitutions, rel).text).toBe(rule.replacement);
+        expect(applySubstitutions(rule.replacement, RULES.substitutions, rel).text).toBe(
+          rule.replacement,
+        );
       }
     }
   });
@@ -264,15 +324,21 @@ describe("parseSubstitutions", () => {
   const rule = (fields) => ({ replacement: "X", rationale: "fixture", ...fields });
 
   test("a misspelled field fails naming the rule instead of matching everywhere", () => {
-    expect(() => parseRule(rule({ patern: "a" }), 3)).toThrow('substitutions[3]: unknown field "patern"');
-    expect(() => parseRule(rule({ pattern: "a", file: "^skills/" }), 0)).toThrow('unknown field "file"');
+    expect(() => parseRule(rule({ patern: "a" }), 3)).toThrow(
+      'substitutions[3]: unknown field "patern"',
+    );
+    expect(() => parseRule(rule({ pattern: "a", file: "^skills/" }), 0)).toThrow(
+      'unknown field "file"',
+    );
   });
 
   test("a rule needs exactly one matcher, a replacement, and a rationale", () => {
     expect(() => parseRule(rule({}), 0)).toThrow("exactly one of a non-empty pattern or regex");
     expect(() => parseRule(rule({ pattern: "a", regex: "a" }), 0)).toThrow("exactly one");
     expect(() => parseRule(rule({ pattern: "" }), 0)).toThrow("exactly one");
-    expect(() => parseRule({ pattern: "a", rationale: "fixture" }, 0)).toThrow("needs a replacement string");
+    expect(() => parseRule({ pattern: "a", rationale: "fixture" }, 0)).toThrow(
+      "needs a replacement string",
+    );
     expect(() => parseRule({ pattern: "a", replacement: "X" }, 0)).toThrow("needs a rationale");
   });
 
@@ -282,7 +348,10 @@ describe("parseSubstitutions", () => {
     expect(() => parseSubstitutions({ substitutions: [generic, specific], denylist: [] })).toThrow(
       'substitutions[1] "Spawn `Task` with" contains substitutions[0] "`Task`"',
     );
-    const { substitutions } = parseSubstitutions({ substitutions: [specific, generic], denylist: [] });
+    const { substitutions } = parseSubstitutions({
+      substitutions: [specific, generic],
+      denylist: [],
+    });
     expect(applySubstitutions("Spawn `Task` with it. One `Task` call.", substitutions).text).toBe(
       "Spawn an `Agent` with it. One `Agent` call.",
     );
@@ -290,14 +359,15 @@ describe("parseSubstitutions", () => {
 
   test("one regex scoped to two path sets counts under two keys", () => {
     const { substitutions } = parseSubstitutions({
-      substitutions: [
-        rule({ regex: "a+", files: "^one/" }),
-        rule({ regex: "a+", files: "^two/" }),
-      ],
+      substitutions: [rule({ regex: "a+", files: "^one/" }), rule({ regex: "a+", files: "^two/" })],
       denylist: [],
     });
-    expect([...applySubstitutions("aa", substitutions, "one/x.md").counts.keys()]).toEqual(["a+ in ^one/"]);
-    expect([...applySubstitutions("aa", substitutions, "two/x.md").counts.keys()]).toEqual(["a+ in ^two/"]);
+    expect([...applySubstitutions("aa", substitutions, "one/x.md").counts.keys()]).toEqual([
+      "a+ in ^one/",
+    ]);
+    expect([...applySubstitutions("aa", substitutions, "two/x.md").counts.keys()]).toEqual([
+      "a+ in ^two/",
+    ]);
   });
 });
 
@@ -312,30 +382,56 @@ describe("parseForks", () => {
   });
 
   test("a malformed entry fails naming the component and path", () => {
-    expect(() => parse({ reason: "x" })).toThrow(`forks.json kit "${path}": unknown field "reason"`);
-    expect(() => parse({ why: undefined })).toThrow(`forks.json kit "${path}": missing field "why"`);
-    expect(() => parse({ kind: "translation" })).toThrow(`forks.json kit "${path}": unknown kind "translation"`);
-    expect(() => parse({ since: "latest" })).toThrow(`forks.json kit "${path}": since "latest" is not a version`);
-    expect(() => parse({ upstream: "maybe" })).toThrow(`forks.json kit "${path}": upstream "maybe"`);
+    expect(() => parse({ reason: "x" })).toThrow(
+      `forks.json kit "${path}": unknown field "reason"`,
+    );
+    expect(() => parse({ why: undefined })).toThrow(
+      `forks.json kit "${path}": missing field "why"`,
+    );
+    expect(() => parse({ kind: "translation" })).toThrow(
+      `forks.json kit "${path}": unknown kind "translation"`,
+    );
+    expect(() => parse({ since: "latest" })).toThrow(
+      `forks.json kit "${path}": since "latest" is not a version`,
+    );
+    expect(() => parse({ upstream: "maybe" })).toThrow(
+      `forks.json kit "${path}": upstream "maybe"`,
+    );
   });
 
   test("an unknown component or a path outside the component fails", () => {
-    expect(() => parseForks({ other: {} }, components)).toThrow('forks.json: unknown component "other"');
-    expect(() => parseForks({ kit: { "tools/s.md": entry } }, components)).toThrow("not under plugins/pstack/skills");
+    expect(() => parseForks({ other: {} }, components)).toThrow(
+      'forks.json: unknown component "other"',
+    );
+    expect(() => parseForks({ kit: { "tools/s.md": entry } }, components)).toThrow(
+      "not under plugins/pstack/skills",
+    );
   });
 });
 
 describe("denylistHits", () => {
   test("a Cursor model slug fails the scan", () => {
     expect(denylistHits("playbook.md", "default `grok-4.8-fast`", RULES.denylist)).toHaveLength(1);
-    expect(denylistHits("playbook.md", "default `gpt-5.6-sol-max`", RULES.denylist)).toHaveLength(1);
+    expect(denylistHits("playbook.md", "default `gpt-5.6-sol-max`", RULES.denylist)).toHaveLength(
+      1,
+    );
     expect(denylistHits("playbook.md", "default `gpt-6-sol-max`", RULES.denylist)).toHaveLength(1);
-    expect(denylistHits("arena.md", "one each on `claude-opus-5-5-max`", RULES.denylist)).toHaveLength(1);
-    expect(denylistHits("how.md", "the role line in the `pstack-models.mdc` rule", RULES.denylist)).toHaveLength(1);
+    expect(
+      denylistHits("arena.md", "one each on `claude-opus-5-5-max`", RULES.denylist),
+    ).toHaveLength(1);
+    expect(
+      denylistHits("how.md", "the role line in the `pstack-models.mdc` rule", RULES.denylist),
+    ).toHaveLength(1);
   });
 
   test("a model name in an example is not a Cursor slug", () => {
-    expect(denylistHits("synthesizer.md", "we renamed `gpt-4` to `gpt-4o` in `encodingForModel`", RULES.denylist)).toEqual([]);
+    expect(
+      denylistHits(
+        "synthesizer.md",
+        "we renamed `gpt-4` to `gpt-4o` in `encodingForModel`",
+        RULES.denylist,
+      ),
+    ).toEqual([]);
   });
 
   test("UI repair advice points to the canonical driver policy", () => {
@@ -346,8 +442,11 @@ describe("denylistHits", () => {
   });
 
   test("rejects the old UI instruction but permits project and legacy skill references", () => {
-    expect(denylistHits("playbook.md", "Use the `verify` skill (UIs).", RULES.denylist)).toHaveLength(1);
-    const supported = "The bundled `/verify` is user-invocable only. " +
+    expect(
+      denylistHits("playbook.md", "Use the `verify` skill (UIs).", RULES.denylist),
+    ).toHaveLength(1);
+    const supported =
+      "The bundled `/verify` is user-invocable only. " +
       "Use the project `verify` skill or maintain `.claude/skills/verify-*/`.";
     expect(denylistHits("policy.md", supported, RULES.denylist)).toEqual([]);
   });
@@ -361,13 +460,20 @@ describe("denylistHits", () => {
     ]) {
       expect(denylistHits("skills/x/SKILL.md", sentence, RULES.denylist)).toHaveLength(1);
     }
-    for (const sentence of ["Use TaskCreate and TaskUpdate.", "## <Task as a verb phrase> (<PR id>)"]) {
+    for (const sentence of [
+      "Use TaskCreate and TaskUpdate.",
+      "## <Task as a verb phrase> (<PR id>)",
+    ]) {
       expect(denylistHits("skills/x/SKILL.md", sentence, RULES.denylist)).toEqual([]);
     }
   });
 
   test("flags residual Cursor-isms with file, line, and hint", () => {
-    const hits = denylistHits("skills/x/SKILL.md", "line one\nrun control-cli now\n", RULES.denylist);
+    const hits = denylistHits(
+      "skills/x/SKILL.md",
+      "line one\nrun control-cli now\n",
+      RULES.denylist,
+    );
     expect(hits).toHaveLength(1);
     expect(hits[0]).toContain("skills/x/SKILL.md:2");
     expect(hits[0]).toContain("control-cli");
@@ -376,7 +482,10 @@ describe("denylistHits", () => {
   test.each([
     ["create-skill", "hand to Cursor's built-in `create-skill` skill"],
     ["generalPurpose", "three `Task` calls, `subagent_type: generalPurpose`, with `model` set"],
-    ["agent-transcripts", "The system prompt names the active workspace's `agent-transcripts/` directory."],
+    [
+      "agent-transcripts",
+      "The system prompt names the active workspace's `agent-transcripts/` directory.",
+    ],
     ['environment: "cloud"', 'Always `environment: "cloud"` unless the task needs this machine'],
     ["is_background", "is_background: true"],
   ])("an upstream sentence carrying %s fails the scan", (token, sentence) => {
@@ -418,24 +527,31 @@ describe("mergeFile", () => {
   });
 
   test.each([
-    ["the repository", join(import.meta.dir, "..")],
+    ["the repository", join(import.meta.dirname, "..")],
     ["outside any repository", tmpdir()],
-  ])("a conflict carries git's merge-style markers whatever the user's merge.conflictStyle, run from %s", (_, cwd) => {
-    const home = tree({ gitconfig: "[merge]\n\tconflictStyle = zdiff3\n" });
-    const sides = [base.replace("l3", "ours"), base, base.replace("l3", "theirs")].map((text) => `Buffer.from(${JSON.stringify(text)})`);
-    const script = [
-      `import { mergeFile } from ${JSON.stringify(join(import.meta.dir, "../tools/sync.mjs"))};`,
-      `process.stdout.write(mergeFile(${sides.join(", ")}).buffer);`,
-    ].join("\n");
+  ])(
+    "a conflict carries git's merge-style markers whatever the user's merge.conflictStyle, run from %s",
+    (_, cwd) => {
+      const home = tree({ gitconfig: "[merge]\n\tconflictStyle = zdiff3\n" });
+      const sides = [base.replace("l3", "ours"), base, base.replace("l3", "theirs")].map(
+        (text) => `Buffer.from(${JSON.stringify(text)})`,
+      );
+      const script = [
+        `import { mergeFile } from ${JSON.stringify(join(import.meta.dirname, "../tools/sync.mjs"))};`,
+        `process.stdout.write(mergeFile(${sides.join(", ")}).buffer);`,
+      ].join("\n");
 
-    const result = spawnSync(process.execPath, ["-e", script], {
-      cwd,
-      encoding: "utf8",
-      env: { ...process.env, GIT_CONFIG_GLOBAL: join(home, "gitconfig") },
-    });
+      const result = spawnSync(process.execPath, ["-e", script], {
+        cwd,
+        encoding: "utf8",
+        env: { ...process.env, GIT_CONFIG_GLOBAL: join(home, "gitconfig") },
+      });
 
-    expect(result.stdout).toBe("l1\nl2\n<<<<<<< local\nours\n=======\ntheirs\n>>>>>>> upstream\nl4\nl5\n");
-  });
+      expect(result.stdout).toBe(
+        "l1\nl2\n<<<<<<< local\nours\n=======\ntheirs\n>>>>>>> upstream\nl4\nl5\n",
+      );
+    },
+  );
 });
 
 describe("changedLines", () => {
@@ -444,38 +560,95 @@ describe("changedLines", () => {
   });
 
   test("throws instead of counting zero when the texts do not differ", () => {
-    expect(() => changedLines(Buffer.from("a\n"), Buffer.from("a\n"))).toThrow("git diff --no-index failed");
+    expect(() => changedLines(Buffer.from("a\n"), Buffer.from("a\n"))).toThrow(
+      "git diff --no-index failed",
+    );
   });
 });
 
 describe("classify", () => {
   const COUNTS = new Map([["AskQuestion", 1]]);
+  /** @param {string} text */
   const bytes = (text) => Buffer.from(text);
+  /**
+   * @param {string} text
+   * @param {number} [mode]
+   */
   const port = (text, mode = 0o644) => ({ bytes: bytes(text), mode });
+  /**
+   * @param {string} text
+   * @param {number} [mode]
+   */
   const upstream = (text, mode = 0o644) => ({ ...port(text, mode), binary: false, counts: COUNTS });
-  const older = (text, mode = 0o644) => ({ ...upstream(text, mode), counts: new Map([["Task", 1]]) });
-  const written = (kind, text, mode = 0o644) => ({ kind, write: { bytes: bytes(text), mode }, counts: COUNTS });
+  /**
+   * @param {string} text
+   * @param {number} [mode]
+   */
+  const older = (text, mode = 0o644) => ({
+    ...upstream(text, mode),
+    counts: new Map([["Task", 1]]),
+  });
+  /**
+   * @template {import("../tools/sync.mjs").WriteKind} Kind
+   * @param {Kind} kind
+   * @param {string} text
+   * @param {number} [mode]
+   */
+  const written = (kind, text, mode = 0o644) => ({
+    kind,
+    write: { bytes: bytes(text), mode },
+    counts: COUNTS,
+  });
   const base = ["l1", "l2", "l3", "l4", "l5"].join("\n") + "\n";
 
-  test.each([
-    ["an upstream symlink", { old: older("a\n"), new: { symlink: true }, local: port("a\n") }, { kind: "symlink" }],
+  /** @type {[string, Parameters<typeof classify>[0], ReturnType<typeof classify>][]} */
+  const cases = [
+    [
+      "an upstream symlink",
+      { old: older("a\n"), new: { symlink: true }, local: port("a\n") },
+      { kind: "symlink" },
+    ],
     ["a new upstream file", { new: upstream("a\n") }, written("added", "a\n")],
-    ["a local copy equal to new", { old: older("a\n"), new: upstream("b\n"), local: port("b\n") }, { kind: "unchanged", kept: bytes("b\n") }],
-    ["a local copy equal to old", { old: older("a\n"), new: upstream("b\n"), local: port("a\n") }, written("updated", "b\n")],
-    ["an upstream mode change", { old: older("a\n"), new: upstream("a\n", 0o755), local: port("a\n") }, written("updated", "a\n", 0o755)],
+    [
+      "a local copy equal to new",
+      { old: older("a\n"), new: upstream("b\n"), local: port("b\n") },
+      { kind: "unchanged", kept: bytes("b\n") },
+    ],
+    [
+      "a local copy equal to old",
+      { old: older("a\n"), new: upstream("b\n"), local: port("a\n") },
+      written("updated", "b\n"),
+    ],
+    [
+      "an upstream mode change",
+      { old: older("a\n"), new: upstream("a\n", 0o755), local: port("a\n") },
+      written("updated", "a\n", 0o755),
+    ],
     [
       "a port edit upstream left alone",
       { old: older("a\n"), new: upstream("a\n"), local: port("a\nport\n") },
       { kind: "forked", kept: bytes("a\nport\n"), changed: 1 },
     ],
-    ["a local symlink under an upstream file", { old: older("a\n"), new: upstream("a\n"), local: { symlink: true } }, { kind: "symlink" }],
-    ["a local symlink at a path upstream deleted", { old: older("a\n"), local: { symlink: true } }, { kind: "symlink" }],
+    [
+      "a local symlink under an upstream file",
+      { old: older("a\n"), new: upstream("a\n"), local: { symlink: true } },
+      { kind: "symlink" },
+    ],
+    [
+      "a local symlink at a path upstream deleted",
+      { old: older("a\n"), local: { symlink: true } },
+      { kind: "symlink" },
+    ],
     [
       "a binary port copy under a text upstream edit",
       { old: older("a\n"), new: upstream("b\n"), local: { ...port("a\0"), binary: true } },
       { kind: "binary-conflict" },
     ],
-    ["a port mode change upstream left alone", { old: older("a\n"), new: upstream("a\n"), local: port("a\n", 0o755) }, { kind: "mode-only", kept: bytes("a\n") }],
+    [
+      "a port mode change upstream left alone",
+      { old: older("a\n"), new: upstream("a\n"), local: port("a\n", 0o755) },
+      { kind: "mode-only", kept: bytes("a\n") },
+    ],
     [
       "a binary changed on both sides",
       { old: older("\0old"), new: { ...upstream("\0new"), binary: true }, local: port("\0port") },
@@ -483,24 +656,57 @@ describe("classify", () => {
     ],
     [
       "edits on both sides that do not overlap",
-      { old: older(base), new: upstream(base.replace("l5", "l5 upstream")), local: port(base.replace("l1", "l1 port")) },
+      {
+        old: older(base),
+        new: upstream(base.replace("l5", "l5 upstream")),
+        local: port(base.replace("l1", "l1 port")),
+      },
       written("merged", base.replace("l1", "l1 port").replace("l5", "l5 upstream")),
     ],
-    ["a port mode change under an upstream edit", { old: older("a\n"), new: upstream("b\n"), local: port("a\n", 0o755) }, written("merged", "b\n", 0o755)],
+    [
+      "a port mode change under an upstream edit",
+      { old: older("a\n"), new: upstream("b\n"), local: port("a\n", 0o755) },
+      written("merged", "b\n", 0o755),
+    ],
     [
       "a port edit and mode change under an upstream edit",
-      { old: older(base), new: upstream(base.replace("l5", "l5 upstream")), local: port(base.replace("l1", "l1 port"), 0o755) },
+      {
+        old: older(base),
+        new: upstream(base.replace("l5", "l5 upstream")),
+        local: port(base.replace("l1", "l1 port"), 0o755),
+      },
       written("merged", base.replace("l1", "l1 port").replace("l5", "l5 upstream"), 0o755),
     ],
     [
       "edits on both sides that overlap",
-      { old: older(base), new: upstream(base.replace("l3", "l3 upstream")), local: port(base.replace("l3", "l3 port")) },
-      { ...written("conflicted", "l1\nl2\n<<<<<<< local\nl3 port\n=======\nl3 upstream\n>>>>>>> upstream\nl4\nl5\n"), hunks: 1 },
+      {
+        old: older(base),
+        new: upstream(base.replace("l3", "l3 upstream")),
+        local: port(base.replace("l3", "l3 port")),
+      },
+      {
+        ...written(
+          "conflicted",
+          "l1\nl2\n<<<<<<< local\nl3 port\n=======\nl3 upstream\n>>>>>>> upstream\nl4\nl5\n",
+        ),
+        hunks: 1,
+      },
     ],
     [
       "a port mode change under an overlapping upstream edit",
-      { old: older(base), new: upstream(base.replace("l3", "l3 upstream")), local: port(base.replace("l3", "l3 port"), 0o755) },
-      { ...written("conflicted", "l1\nl2\n<<<<<<< local\nl3 port\n=======\nl3 upstream\n>>>>>>> upstream\nl4\nl5\n", 0o755), hunks: 1 },
+      {
+        old: older(base),
+        new: upstream(base.replace("l3", "l3 upstream")),
+        local: port(base.replace("l3", "l3 port"), 0o755),
+      },
+      {
+        ...written(
+          "conflicted",
+          "l1\nl2\n<<<<<<< local\nl3 port\n=======\nl3 upstream\n>>>>>>> upstream\nl4\nl5\n",
+          0o755,
+        ),
+        hunks: 1,
+      },
     ],
     [
       "an upstream mode change under a port edit",
@@ -509,31 +715,61 @@ describe("classify", () => {
     ],
     [
       "mode changes on both sides under an overlapping edit",
-      { old: older(base), new: upstream(base.replace("l3", "l3 upstream"), 0o755), local: port(base.replace("l3", "l3 port"), 0o600) },
-      { ...written("conflicted", "l1\nl2\n<<<<<<< local\nl3 port\n=======\nl3 upstream\n>>>>>>> upstream\nl4\nl5\n", 0o755), hunks: 1 },
+      {
+        old: older(base),
+        new: upstream(base.replace("l3", "l3 upstream"), 0o755),
+        local: port(base.replace("l3", "l3 port"), 0o600),
+      },
+      {
+        ...written(
+          "conflicted",
+          "l1\nl2\n<<<<<<< local\nl3 port\n=======\nl3 upstream\n>>>>>>> upstream\nl4\nl5\n",
+          0o755,
+        ),
+        hunks: 1,
+      },
     ],
     [
       "a file new on both sides, which has no common mode and takes upstream's",
       { new: upstream("upstream\n"), local: port("port\n", 0o755) },
-      { ...written("conflicted", "<<<<<<< local\nport\n=======\nupstream\n>>>>>>> upstream\n"), hunks: 1 },
+      {
+        ...written("conflicted", "<<<<<<< local\nport\n=======\nupstream\n>>>>>>> upstream\n"),
+        hunks: 1,
+      },
     ],
     [
       "a file that replaced an upstream symlink, which has no common mode and takes upstream's",
       { old: { symlink: true }, new: upstream("upstream\n"), local: port("port\n", 0o755) },
-      { ...written("conflicted", "<<<<<<< local\nport\n=======\nupstream\n>>>>>>> upstream\n"), hunks: 1 },
+      {
+        ...written("conflicted", "<<<<<<< local\nport\n=======\nupstream\n>>>>>>> upstream\n"),
+        hunks: 1,
+      },
     ],
-    ["an upstream deletion the port never edited", { old: older("a\n"), local: port("a\n") }, { kind: "deleted" }],
-    ["an upstream deletion of a port edit", { old: older("a\n"), local: port("port\n") }, { kind: "removed-upstream", kept: bytes("port\n") }],
-    ["an upstream deletion of a port mode change", { old: older("a\n"), local: port("a\n", 0o755) }, { kind: "removed-upstream", kept: bytes("a\n") }],
+    [
+      "an upstream deletion the port never edited",
+      { old: older("a\n"), local: port("a\n") },
+      { kind: "deleted" },
+    ],
+    [
+      "an upstream deletion of a port edit",
+      { old: older("a\n"), local: port("port\n") },
+      { kind: "removed-upstream", kept: bytes("port\n") },
+    ],
+    [
+      "an upstream deletion of a port mode change",
+      { old: older("a\n"), local: port("a\n", 0o755) },
+      { kind: "removed-upstream", kept: bytes("a\n") },
+    ],
     ["an upstream deletion the port already made", { old: older("a\n") }, null],
-  ])("%s", (_, input, outcome) => {
+  ];
+  test.each(cases)("%s", (_, input, outcome) => {
     expect(classify(input)).toEqual(outcome);
   });
 });
 
 describe("syncComponent", () => {
   test("installed plugin text is free of the denylist", () => {
-    const plugin = join(import.meta.dir, "../plugins/pstack");
+    const plugin = join(import.meta.dirname, "../plugins/pstack");
     const report = sync({ oldDir: plugin, newDir: plugin, localDir: plugin, dryRun: true });
     expect(report.hits).toEqual([]);
   });
@@ -566,7 +802,9 @@ describe("syncComponent", () => {
     expect(readFileSync(join(local, "skills/a/SKILL.md"), "utf8")).toBe(
       "Step 1: AskUserQuestion about scope. Step 2: verify.\n",
     );
-    expect(readFileSync(join(local, "skills/c/SKILL.md"), "utf8")).toBe("Brand new skill. AskUserQuestion early.\n");
+    expect(readFileSync(join(local, "skills/c/SKILL.md"), "utf8")).toBe(
+      "Brand new skill. AskUserQuestion early.\n",
+    );
     expect(readFileSync(join(local, "skills/b/SKILL.md"), "utf8")).toBe(
       "<<<<<<< local\nOld b body, plus a Platform note the port added.\n=======\nNew b body.\n>>>>>>> upstream\n",
     );
@@ -586,7 +824,12 @@ describe("syncComponent", () => {
     });
     const local = tree({ "skills/a/SKILL.md": "keep\n", "README.md": "the port's own readme\n" });
 
-    const report = sync({ oldDir: oldUp, newDir: newUp, localDir: local, exclude: ["docs/", "automations", "README.md"] });
+    const report = sync({
+      oldDir: oldUp,
+      newDir: newUp,
+      localDir: local,
+      exclude: ["docs/", "automations", "README.md"],
+    });
 
     expect(report.written).toEqual([]);
     expect(report.deleted).toEqual([]);
@@ -602,7 +845,11 @@ describe("syncComponent", () => {
   test("an upstream deletion removes the local copy when the port never edited it", () => {
     const oldUp = tree({ "a.md": "keep\n", "gone.md": "AskQuestion here\n", "forked.md": "old\n" });
     const newUp = tree({ "a.md": "keep\n" });
-    const local = tree({ "a.md": "keep\n", "gone.md": "AskUserQuestion here\n", "forked.md": "old, port edit\n" });
+    const local = tree({
+      "a.md": "keep\n",
+      "gone.md": "AskUserQuestion here\n",
+      "forked.md": "old, port edit\n",
+    });
 
     const report = sync({ oldDir: oldUp, newDir: newUp, localDir: local });
 
@@ -663,11 +910,17 @@ describe("syncComponent", () => {
     const oldUp = tree({ "merged.md": "a\nb\nc\nd\ne\n", "conflicted.md": "one\n" });
     const newUp = tree({ "merged.md": "a\nb\nc\nd\nE\n", "conflicted.md": "two\n" });
     const local = tree({ "merged.md": "A\nb\nc\nd\ne\n", "conflicted.md": "port\n" });
-    const forks = new Map([["merged.md", {}], ["conflicted.md", {}]]);
+    const forks = new Map([
+      ["merged.md", {}],
+      ["conflicted.md", {}],
+    ]);
 
     const report = sync({ oldDir: oldUp, newDir: newUp, localDir: local, forks, dryRun: true });
 
-    expect(report.written.map(({ kind, rel }) => `${kind} ${rel}`).sort()).toEqual(["conflicted conflicted.md", "merged merged.md"]);
+    expect(report.written.map(({ kind, rel }) => `${kind} ${rel}`).sort()).toEqual([
+      "conflicted conflicted.md",
+      "merged merged.md",
+    ]);
     expect(report.undeclared).toEqual([]);
     expect(report.stale).toEqual([]);
   });
@@ -675,7 +928,10 @@ describe("syncComponent", () => {
   test("a declaration whose path is no longer forked or no longer exists is stale", () => {
     const up = tree({ "clean.md": "same\n" });
     const local = tree({ "clean.md": "same\n" });
-    const forks = new Map([["clean.md", {}], ["gone.md", {}]]);
+    const forks = new Map([
+      ["clean.md", {}],
+      ["gone.md", {}],
+    ]);
 
     const report = sync({ oldDir: up, newDir: up, localDir: local, forks, dryRun: true });
 
@@ -718,7 +974,11 @@ describe("syncComponent", () => {
     [
       ["text", "a\nb\nc\nd\ne\n", "A\nb\nc\nd\nE\n", "A\nb\nc\nd\ne\n", 0o644],
       ["mode", "old\n", "new\n", "old\n", 0o755],
-    ].flatMap((change) => [true, false].flatMap((dryRun) => [true, false].map((declared) => [...change, dryRun, declared]))),
+    ].flatMap((change) =>
+      [true, false].flatMap((dryRun) =>
+        [true, false].map((declared) => [...change, dryRun, declared]),
+      ),
+    ),
   )(
     "upstream absorbing a port %s change retires its fork during the same sync (dry run %s, declared %s)",
     (_, oldText, newText, localText, mode, dryRun, declared) => {
@@ -733,7 +993,9 @@ describe("syncComponent", () => {
 
       expect(report.written).toEqual([{ kind: "updated", rel: "doc.md" }]);
       expect(report.undeclared).toEqual([]);
-      expect(report.stale).toEqual(declared ? [{ rel: "doc.md", reason: "is no longer forked (updated)" }] : []);
+      expect(report.stale).toEqual(
+        declared ? [{ rel: "doc.md", reason: "is no longer forked (updated)" }] : [],
+      );
       expect(readFileSync(join(localDir, "doc.md"), "utf8")).toBe(dryRun ? localText : newText);
       expect(statSync(join(localDir, "doc.md")).mode & 0o777).toBe(mode);
     },
@@ -799,7 +1061,7 @@ describe("syncComponent", () => {
 
     expect(report.conflicts).toEqual([{ rel: "s.md", reason: "conflict", hunks: 1 }]);
     expect(report.hits).toHaveLength(1);
-    expect(report.hits[0]).toStartWith("s.md:4:");
+    expect(report.hits[0].startsWith("s.md:4:")).toBe(true);
     expect(readFileSync(join(local, "s.md"), "utf8")).toBe("manual correction\n");
   });
 
@@ -821,7 +1083,9 @@ describe("syncComponent", () => {
     const local = tree({ "s.md": "old\n" });
 
     const failed = sync({ oldDir: oldUp, newDir: newUp, localDir: local });
-    const rules = [parseRule({ pattern: "run control-cli", replacement: "run cli", rationale: "fixture" }, 0)];
+    const rules = [
+      parseRule({ pattern: "run control-cli", replacement: "run cli", rationale: "fixture" }, 0),
+    ];
     const recovered = sync({
       oldDir: oldUp,
       newDir: newUp,
@@ -889,7 +1153,9 @@ describe("syncComponent", () => {
     expect(actual.written).toContainEqual({ kind: "merged", rel: "merged.md" });
     expect(actual.conflicts).toContainEqual({ rel: "clash.md", reason: "conflict", hunks: 1 });
     expect(actual.forked).toEqual([{ rel: "untouched.md", changed: 2 }]);
-    expect(readFileSync(join(dryRunFixture.localDir, "updated.md")).equals(beforeDryRun)).toBe(true);
+    expect(readFileSync(join(dryRunFixture.localDir, "updated.md")).equals(beforeDryRun)).toBe(
+      true,
+    );
     expect(readFileSync(join(dryRunFixture.localDir, "merged.md")).equals(beforeMerged)).toBe(true);
     expect(existsSync(join(dryRunFixture.localDir, "new.md"))).toBe(false);
     expect(existsSync(join(dryRunFixture.localDir, "gone.md"))).toBe(true);
@@ -921,7 +1187,10 @@ describe("syncComponent", () => {
   });
 
   test("a binary file of any extension is copied byte for byte and never substituted", () => {
-    const invalidUtf8 = Buffer.concat([Buffer.from("AskQuestion "), Buffer.from([0xff, 0xfe, 0x80])]);
+    const invalidUtf8 = Buffer.concat([
+      Buffer.from("AskQuestion "),
+      Buffer.from([0xff, 0xfe, 0x80]),
+    ]);
     const withNul = Buffer.from("AskQuestion\0");
     const oldUp = tree({});
     const newUp = tree({});
@@ -950,7 +1219,9 @@ describe("syncComponent", () => {
 
     expect(report.binaryConflicts).toEqual(["font.ttf"]);
     expect(report.conflicts).toEqual([]);
-    expect(readFileSync(join(local, "font.ttf")).equals(Buffer.from([0x00, 0xff, 0x03]))).toBe(true);
+    expect(readFileSync(join(local, "font.ttf")).equals(Buffer.from([0x00, 0xff, 0x03]))).toBe(
+      true,
+    );
     expect(readFileSync(join(local, "sibling.md"), "utf8")).toBe("old\n");
   });
 
@@ -1001,7 +1272,8 @@ describe("syncComponent", () => {
     expect(report.forked).toEqual([]);
     expect(report.portOnly).toEqual(["port-only.md"]);
     expect(existsSync(join(outside, "created.md"))).toBe(false);
-    for (const rel of ["dangling.md", "linked.md", "gone.md"]) expect(lstatSync(join(local, rel)).isSymbolicLink()).toBe(true);
+    for (const rel of ["dangling.md", "linked.md", "gone.md"])
+      expect(lstatSync(join(local, rel)).isSymbolicLink()).toBe(true);
   });
 
   test("a local symlink at a directory above upstream paths is reported at the link, and nothing is written through it", () => {
@@ -1029,7 +1301,8 @@ describe("syncComponent", () => {
   // A filesystem that resolves each key to the entry spelled as its value, the
   // way one that folds case or normalises Unicode does. It sits on the real
   // one, so the rule runs wherever the suite does.
-  const aliasing = (heldAs) => (dir, name) => lstatSync(join(dir, heldAs[name] ?? name), { throwIfNoEntry: false });
+  const aliasing = (heldAs) => (dir, name) =>
+    lstatSync(join(dir, heldAs[name] ?? name), { throwIfNoEntry: false });
   const aliasesHere = (held, asked) => existsSync(join(tree({ [held]: "" }), asked));
   const sameEntry = (asked) => `the same entry as upstream's ${asked} on this filesystem`;
   const onAliasingFilesystems = (title, heldAs, body) => {
@@ -1046,59 +1319,85 @@ describe("syncComponent", () => {
     ["a sharp s", "strasse.md", "stra\u00dfe.md"],
     ["a ligature", "file.md", "\ufb01le.md"],
   ]) {
-    onAliasingFilesystems(`an upstream edit to a path the filesystem resolves to a port file whose name differs by ${difference} fails the run before any write`, { [asked]: held }, (filesystem) => {
-      const base = "l1\nl2\nl3\nl4\nl5\nl6\nl7\n";
-      const oldUp = tree({ [asked]: base, "sibling.md": "old\n" });
-      const newUp = tree({ [asked]: base.replace("l7", "l7 upstream"), "sibling.md": "new\n" });
-      const local = tree({ [held]: base.replace("l1", "l1 the port"), "sibling.md": "old\n" });
+    onAliasingFilesystems(
+      `an upstream edit to a path the filesystem resolves to a port file whose name differs by ${difference} fails the run before any write`,
+      { [asked]: held },
+      (filesystem) => {
+        const base = "l1\nl2\nl3\nl4\nl5\nl6\nl7\n";
+        const oldUp = tree({ [asked]: base, "sibling.md": "old\n" });
+        const newUp = tree({ [asked]: base.replace("l7", "l7 upstream"), "sibling.md": "new\n" });
+        const local = tree({ [held]: base.replace("l1", "l1 the port"), "sibling.md": "old\n" });
 
-      const report = sync({ oldDir: oldUp, newDir: newUp, localDir: local, ...filesystem });
+        const report = sync({ oldDir: oldUp, newDir: newUp, localDir: local, ...filesystem });
 
-      expect(report.collisions).toEqual([{ rel: held, reason: sameEntry(asked) }]);
-      expect(readdirSync(local).sort()).toEqual([held, "sibling.md"].sort());
-      expect(readFileSync(join(local, held), "utf8")).toBe(base.replace("l1", "l1 the port"));
-      expect(readFileSync(join(local, "sibling.md"), "utf8")).toBe("old\n");
-    });
+        expect(report.collisions).toEqual([{ rel: held, reason: sameEntry(asked) }]);
+        expect(readdirSync(local).sort()).toEqual([held, "sibling.md"].sort());
+        expect(readFileSync(join(local, held), "utf8")).toBe(base.replace("l1", "l1 the port"));
+        expect(readFileSync(join(local, "sibling.md"), "utf8")).toBe("old\n");
+      },
+    );
 
-    onAliasingFilesystems(`an upstream rename to a name the filesystem resolves to the old entry, differing by ${difference}, deletes nothing`, { [asked]: held }, (filesystem) => {
-      const oldUp = tree({ [held]: "body\n", "sibling.md": "old\n" });
-      const newUp = tree({ [asked]: "body\n", "sibling.md": "new\n" });
-      const local = tree({ [held]: "body\n", "sibling.md": "old\n" });
+    onAliasingFilesystems(
+      `an upstream rename to a name the filesystem resolves to the old entry, differing by ${difference}, deletes nothing`,
+      { [asked]: held },
+      (filesystem) => {
+        const oldUp = tree({ [held]: "body\n", "sibling.md": "old\n" });
+        const newUp = tree({ [asked]: "body\n", "sibling.md": "new\n" });
+        const local = tree({ [held]: "body\n", "sibling.md": "old\n" });
 
-      const report = sync({ oldDir: oldUp, newDir: newUp, localDir: local, ...filesystem });
+        const report = sync({ oldDir: oldUp, newDir: newUp, localDir: local, ...filesystem });
 
-      expect(report.collisions).toEqual([{ rel: held, reason: sameEntry(asked) }]);
-      expect(readdirSync(local).sort()).toEqual([held, "sibling.md"].sort());
-      expect(readFileSync(join(local, "sibling.md"), "utf8")).toBe("old\n");
-    });
+        expect(report.collisions).toEqual([{ rel: held, reason: sameEntry(asked) }]);
+        expect(readdirSync(local).sort()).toEqual([held, "sibling.md"].sort());
+        expect(readFileSync(join(local, "sibling.md"), "utf8")).toBe("old\n");
+      },
+    );
   }
 
-  test.skipIf(aliasesHere("Foo.md", "foo.md"))("where the filesystem holds both spellings, an upstream rename that only changes case is carried out", () => {
-    const oldUp = tree({ "Foo.md": "body\n" });
-    const newUp = tree({ "foo.md": "body\n" });
-    const local = tree({ "Foo.md": "body\n" });
+  test.skipIf(aliasesHere("Foo.md", "foo.md"))(
+    "where the filesystem holds both spellings, an upstream rename that only changes case is carried out",
+    () => {
+      const oldUp = tree({ "Foo.md": "body\n" });
+      const newUp = tree({ "foo.md": "body\n" });
+      const local = tree({ "Foo.md": "body\n" });
 
-    const report = sync({ oldDir: oldUp, newDir: newUp, localDir: local });
+      const report = sync({ oldDir: oldUp, newDir: newUp, localDir: local });
 
-    expect(report.collisions).toEqual([]);
-    expect(readdirSync(local)).toEqual(["foo.md"]);
-  });
+      expect(report.collisions).toEqual([]);
+      expect(readdirSync(local)).toEqual(["foo.md"]);
+    },
+  );
 
-  onAliasingFilesystems("a new upstream file the filesystem resolves to a port path with no outcome fails the run before any write", { "kit.md": "Kit.md", "notes.md": "NOTES.md" }, (filesystem) => {
-    const oldUp = tree({ "a.md": "old a\n" });
-    const newUp = tree({ "a.md": "new a\n", "kit.md": "upstream\n", "notes.md": "upstream\n" });
-    const local = tree({ "a.md": "old a\n", "Kit.md": "another component's\n", "NOTES.md": "the port's own\n" });
+  onAliasingFilesystems(
+    "a new upstream file the filesystem resolves to a port path with no outcome fails the run before any write",
+    { "kit.md": "Kit.md", "notes.md": "NOTES.md" },
+    (filesystem) => {
+      const oldUp = tree({ "a.md": "old a\n" });
+      const newUp = tree({ "a.md": "new a\n", "kit.md": "upstream\n", "notes.md": "upstream\n" });
+      const local = tree({
+        "a.md": "old a\n",
+        "Kit.md": "another component's\n",
+        "NOTES.md": "the port's own\n",
+      });
 
-    const report = sync({ oldDir: oldUp, newDir: newUp, localDir: local, carriedElsewhere: ["Kit.md"], exclude: ["NOTES.md"], ...filesystem });
+      const report = sync({
+        oldDir: oldUp,
+        newDir: newUp,
+        localDir: local,
+        carriedElsewhere: ["Kit.md"],
+        exclude: ["NOTES.md"],
+        ...filesystem,
+      });
 
-    expect(report.collisions).toEqual([
-      { rel: "Kit.md", reason: sameEntry("kit.md") },
-      { rel: "NOTES.md", reason: sameEntry("notes.md") },
-    ]);
-    expect(readFileSync(join(local, "a.md"), "utf8")).toBe("old a\n");
-    expect(readFileSync(join(local, "Kit.md"), "utf8")).toBe("another component's\n");
-    expect(readFileSync(join(local, "NOTES.md"), "utf8")).toBe("the port's own\n");
-  });
+      expect(report.collisions).toEqual([
+        { rel: "Kit.md", reason: sameEntry("kit.md") },
+        { rel: "NOTES.md", reason: sameEntry("notes.md") },
+      ]);
+      expect(readFileSync(join(local, "a.md"), "utf8")).toBe("old a\n");
+      expect(readFileSync(join(local, "Kit.md"), "utf8")).toBe("another component's\n");
+      expect(readFileSync(join(local, "NOTES.md"), "utf8")).toBe("the port's own\n");
+    },
+  );
 
   test("a port file where upstream has a directory, or a port directory where upstream has a file, fails the run before any write", () => {
     const oldUp = tree({ "a.md": "old a\n" });
@@ -1129,41 +1428,60 @@ describe("syncComponent", () => {
 
     const report = sync({ oldDir: oldUp, newDir: newUp, localDir: local });
 
-    expect(report.collisions).toEqual([{ rel: "c", reason: "a directory where upstream has a file" }]);
+    expect(report.collisions).toEqual([
+      { rel: "c", reason: "a directory where upstream has a file" },
+    ]);
     expect(readFileSync(join(local, "a.md"), "utf8")).toBe("old a\n");
   });
 
-  onAliasingFilesystems("an upstream directory the filesystem resolves to a port file fails the run before any write", { b: "B" }, (filesystem) => {
-    const oldUp = tree({ "a.md": "old a\n" });
-    const newUp = tree({ "a.md": "new a\n", "b/new.md": "n\n" });
-    const local = tree({ "a.md": "old a\n", B: "a file in the port\n" });
+  onAliasingFilesystems(
+    "an upstream directory the filesystem resolves to a port file fails the run before any write",
+    { b: "B" },
+    (filesystem) => {
+      const oldUp = tree({ "a.md": "old a\n" });
+      const newUp = tree({ "a.md": "new a\n", "b/new.md": "n\n" });
+      const local = tree({ "a.md": "old a\n", B: "a file in the port\n" });
 
-    const report = sync({ oldDir: oldUp, newDir: newUp, localDir: local, ...filesystem });
+      const report = sync({ oldDir: oldUp, newDir: newUp, localDir: local, ...filesystem });
 
-    expect(report.collisions).toEqual([{ rel: "B", reason: sameEntry("b") }]);
-    expect(readFileSync(join(local, "a.md"), "utf8")).toBe("old a\n");
-    expect(readFileSync(join(local, "B"), "utf8")).toBe("a file in the port\n");
-  });
+      expect(report.collisions).toEqual([{ rel: "B", reason: sameEntry("b") }]);
+      expect(readFileSync(join(local, "a.md"), "utf8")).toBe("old a\n");
+      expect(readFileSync(join(local, "B"), "utf8")).toBe("a file in the port\n");
+    },
+  );
 
-  onAliasingFilesystems("an upstream directory the filesystem resolves to a port directory spelled another way fails the run before any write", { scripts: "Scripts" }, (filesystem) => {
-    const oldUp = tree({ "kit/a.md": "old a\n" });
-    const newUp = tree({ "kit/a.md": "new a\n", "kit/scripts/y.sh": "upstream y\n", "kit/scripts/deep/z.sh": "upstream z\n" });
-    const local = tree({ "kit/a.md": "old a\n", "kit/Scripts/x.sh": "port x\n" });
+  onAliasingFilesystems(
+    "an upstream directory the filesystem resolves to a port directory spelled another way fails the run before any write",
+    { scripts: "Scripts" },
+    (filesystem) => {
+      const oldUp = tree({ "kit/a.md": "old a\n" });
+      const newUp = tree({
+        "kit/a.md": "new a\n",
+        "kit/scripts/y.sh": "upstream y\n",
+        "kit/scripts/deep/z.sh": "upstream z\n",
+      });
+      const local = tree({ "kit/a.md": "old a\n", "kit/Scripts/x.sh": "port x\n" });
 
-    const report = sync({ oldDir: oldUp, newDir: newUp, localDir: local, ...filesystem });
+      const report = sync({ oldDir: oldUp, newDir: newUp, localDir: local, ...filesystem });
 
-    expect(report.collisions).toEqual([{ rel: "kit/Scripts", reason: sameEntry("kit/scripts") }]);
-    expect(readdirSync(join(local, "kit")).sort()).toEqual(["Scripts", "a.md"]);
-    expect(readdirSync(join(local, "kit/Scripts"))).toEqual(["x.sh"]);
-    expect(readFileSync(join(local, "kit/a.md"), "utf8")).toBe("old a\n");
-  });
+      expect(report.collisions).toEqual([{ rel: "kit/Scripts", reason: sameEntry("kit/scripts") }]);
+      expect(readdirSync(join(local, "kit")).sort()).toEqual(["Scripts", "a.md"]);
+      expect(readdirSync(join(local, "kit/Scripts"))).toEqual(["x.sh"]);
+      expect(readFileSync(join(local, "kit/a.md"), "utf8")).toBe("old a\n");
+    },
+  );
 
   test("an entry the filesystem finds and the listing cannot identify still fails the run before any write", () => {
     const oldUp = tree({ "a.md": "old a\n" });
     const newUp = tree({ "a.md": "new a\n", "new.md": "n\n" });
     const local = tree({ "a.md": "old a\n" });
 
-    const report = sync({ oldDir: oldUp, newDir: newUp, localDir: local, lookUp: () => ({ ino: -1 }) });
+    const report = sync({
+      oldDir: oldUp,
+      newDir: newUp,
+      localDir: local,
+      lookUp: () => ({ ino: -1 }),
+    });
 
     expect(report.collisions).toEqual([{ rel: "new.md", reason: sameEntry("new.md") }]);
     expect(readdirSync(local)).toEqual(["a.md"]);
@@ -1175,22 +1493,26 @@ describe("syncComponent", () => {
     ["a file", "file.md"],
     ["nothing", "missing"],
   ]) {
-    onAliasingFilesystems(`an upstream directory the filesystem resolves to a port link to ${target} fails the run before any write`, { b: "B" }, (filesystem) => {
-      const outside = tree({ "dir/keep.md": "k\n", "file.md": "f\n" });
-      const oldUp = tree({ "a.md": "old a\n" });
-      const newUp = tree({ "a.md": "new a\n", "b/new.md": "n\n" });
-      const local = tree({ "a.md": "old a\n" });
-      symlinkSync(join(outside, linkTo), join(local, "B"));
+    onAliasingFilesystems(
+      `an upstream directory the filesystem resolves to a port link to ${target} fails the run before any write`,
+      { b: "B" },
+      (filesystem) => {
+        const outside = tree({ "dir/keep.md": "k\n", "file.md": "f\n" });
+        const oldUp = tree({ "a.md": "old a\n" });
+        const newUp = tree({ "a.md": "new a\n", "b/new.md": "n\n" });
+        const local = tree({ "a.md": "old a\n" });
+        symlinkSync(join(outside, linkTo), join(local, "B"));
 
-      const report = sync({ oldDir: oldUp, newDir: newUp, localDir: local, ...filesystem });
+        const report = sync({ oldDir: oldUp, newDir: newUp, localDir: local, ...filesystem });
 
-      expect(report.collisions).toEqual([{ rel: "B", reason: sameEntry("b") }]);
-      expect(readFileSync(join(local, "a.md"), "utf8")).toBe("old a\n");
-      expect(lstatSync(join(local, "B")).isSymbolicLink()).toBe(true);
-      expect(readdirSync(outside).sort()).toEqual(["dir", "file.md"]);
-      expect(readdirSync(join(outside, "dir"))).toEqual(["keep.md"]);
-      expect(readFileSync(join(outside, "file.md"), "utf8")).toBe("f\n");
-    });
+        expect(report.collisions).toEqual([{ rel: "B", reason: sameEntry("b") }]);
+        expect(readFileSync(join(local, "a.md"), "utf8")).toBe("old a\n");
+        expect(lstatSync(join(local, "B")).isSymbolicLink()).toBe(true);
+        expect(readdirSync(outside).sort()).toEqual(["dir", "file.md"]);
+        expect(readdirSync(join(outside, "dir"))).toEqual(["keep.md"]);
+        expect(readFileSync(join(outside, "file.md"), "utf8")).toBe("f\n");
+      },
+    );
   }
 
   test("a binary port copy under an upstream text edit blocks every write", () => {
@@ -1205,23 +1527,24 @@ describe("syncComponent", () => {
     expect(readFileSync(join(local, "sibling.md"), "utf8")).toBe("old\n");
   });
 
-  test("a written file takes upstream's mode, and a mode-only upstream change is written", () => underUmask(0o022, () => {
-    const oldUp = tree({ "same.sh": "echo\n", "forked.sh": "echo\n" });
-    const newUp = tree({ "same.sh": "echo\n", "forked.sh": "echo\n", "added.sh": "echo\n" });
-    const local = tree({ "same.sh": "echo\n", "forked.sh": "echo port\n" });
-    const scripts = ["same.sh", "forked.sh", "added.sh"];
-    for (const rel of scripts) chmodSync(join(newUp, rel), 0o755);
+  test("a written file takes upstream's mode, and a mode-only upstream change is written", () =>
+    underUmask(0o022, () => {
+      const oldUp = tree({ "same.sh": "echo\n", "forked.sh": "echo\n" });
+      const newUp = tree({ "same.sh": "echo\n", "forked.sh": "echo\n", "added.sh": "echo\n" });
+      const local = tree({ "same.sh": "echo\n", "forked.sh": "echo port\n" });
+      const scripts = ["same.sh", "forked.sh", "added.sh"];
+      for (const rel of scripts) chmodSync(join(newUp, rel), 0o755);
 
-    const report = sync({ oldDir: oldUp, newDir: newUp, localDir: local });
+      const report = sync({ oldDir: oldUp, newDir: newUp, localDir: local });
 
-    expect(report.written).toEqual([
-      { kind: "added", rel: "added.sh" },
-      { kind: "merged", rel: "forked.sh" },
-      { kind: "updated", rel: "same.sh" },
-    ]);
-    for (const rel of scripts) expect(statSync(join(local, rel)).mode & 0o777).toBe(0o755);
-    expect(readFileSync(join(local, "forked.sh"), "utf8")).toBe("echo port\n");
-  }));
+      expect(report.written).toEqual([
+        { kind: "added", rel: "added.sh" },
+        { kind: "merged", rel: "forked.sh" },
+        { kind: "updated", rel: "same.sh" },
+      ]);
+      for (const rel of scripts) expect(statSync(join(local, rel)).mode & 0o777).toBe(0o755);
+      expect(readFileSync(join(local, "forked.sh"), "utf8")).toBe("echo port\n");
+    }));
 
   test("a file upstream never touched is forked, not conflicted", () => {
     const body = "shared line\n";
@@ -1234,7 +1557,9 @@ describe("syncComponent", () => {
     expect(report.forked).toEqual([{ rel: "s.md", changed: 2 }]);
     expect(report.conflicts).toEqual([]);
     expect(report.written).toEqual([]);
-    expect(readFileSync(join(local, "s.md"), "utf8")).toBe("shared line, plus the port's own paragraph\n");
+    expect(readFileSync(join(local, "s.md"), "utf8")).toBe(
+      "shared line, plus the port's own paragraph\n",
+    );
   });
 
   test("a forked file is denylist-scanned on its local bytes", () => {
@@ -1247,7 +1572,7 @@ describe("syncComponent", () => {
 
     expect(report.forked).toEqual([{ rel: "s.md", changed: 1 }]);
     expect(report.hits).toHaveLength(1);
-    expect(report.hits[0]).toStartWith("s.md:2:");
+    expect(report.hits[0].startsWith("s.md:2:")).toBe(true);
   });
 
   test("non-overlapping port and upstream edits merge into one written file", () => {
@@ -1262,7 +1587,9 @@ describe("syncComponent", () => {
     expect(report.conflicts).toEqual([]);
     expect(report.forked).toEqual([]);
     expect(readFileSync(join(local, "s.md"), "utf8")).toBe(
-      base.replace("l1", "l1 the port rewrote the head").replace("l9", "l9 upstream rewrote the tail"),
+      base
+        .replace("l1", "l1 the port rewrote the head")
+        .replace("l9", "l9 upstream rewrote the tail"),
     );
   });
 
@@ -1271,7 +1598,8 @@ describe("syncComponent", () => {
     const oldUp = tree({ "s.md": base });
     const newUp = tree({ "s.md": base.replace("l3", "l3 upstream") });
     const local = tree({ "s.md": base.replace("l3", "l3 the port") });
-    const marked = "l1\nl2\n<<<<<<< local\nl3 the port\n=======\nl3 upstream\n>>>>>>> upstream\nl4\nl5\n";
+    const marked =
+      "l1\nl2\n<<<<<<< local\nl3 the port\n=======\nl3 upstream\n>>>>>>> upstream\nl4\nl5\n";
 
     const report = sync({ oldDir: oldUp, newDir: newUp, localDir: local });
 
@@ -1322,18 +1650,28 @@ describe("syncComponent", () => {
     ["the port's copy is group-writable", 0o644, 0o664],
     ["upstream's clone is group-writable", 0o664, 0o644],
     ["the port's script is executable by its owner alone", 0o755, 0o700],
-  ])("a mode that differs only in bits git does not record is unchanged, not a mode fork: %s", (_, upstreamMode, portMode) => {
-    const up = tree({ "s.md": "same\n" });
-    const local = tree({ "s.md": "same\n" });
-    chmodSync(join(up, "s.md"), upstreamMode);
-    chmodSync(join(local, "s.md"), portMode);
+  ])(
+    "a mode that differs only in bits git does not record is unchanged, not a mode fork: %s",
+    (_, upstreamMode, portMode) => {
+      const up = tree({ "s.md": "same\n" });
+      const local = tree({ "s.md": "same\n" });
+      chmodSync(join(up, "s.md"), upstreamMode);
+      chmodSync(join(local, "s.md"), portMode);
 
-    const report = sync({ oldDir: up, newDir: up, localDir: local, forks: new Map(), atPin: true, dryRun: true });
+      const report = sync({
+        oldDir: up,
+        newDir: up,
+        localDir: local,
+        forks: new Map(),
+        atPin: true,
+        dryRun: true,
+      });
 
-    expect(report.forked).toEqual([]);
-    expect(report.undeclared).toEqual([]);
-    expect(report.unchanged).toBe(1);
-  });
+      expect(report.forked).toEqual([]);
+      expect(report.undeclared).toEqual([]);
+      expect(report.unchanged).toBe(1);
+    },
+  );
 
   test("a merge keeps a mode the port changed when upstream left the mode alone", () => {
     const oldUp = tree({ "run.sh": "echo\n" });
@@ -1379,19 +1717,26 @@ describe("syncComponent", () => {
     ["a new executable file", null, 0o700],
     ["an update that sets the executable bit", 0o600, 0o700],
     ["an update that clears the executable bit", 0o700, 0o600],
-  ])("under a strict umask a write grants no permission the clone's copy lacks: %s", (_, oldMode, newMode) => underUmask(0o077, () => {
-    const held = oldMode === null ? {} : { "run.sh": "old\n" };
-    const oldUp = tree(held);
-    const newUp = tree({ "run.sh": "new\n" });
-    const local = tree(held);
-    chmodSync(join(newUp, "run.sh"), newMode);
-    if (oldMode !== null) for (const dir of [oldUp, local]) chmodSync(join(dir, "run.sh"), oldMode);
+  ])(
+    "under a strict umask a write grants no permission the clone's copy lacks: %s",
+    (_, oldMode, newMode) =>
+      underUmask(0o077, () => {
+        const held = oldMode === null ? {} : { "run.sh": "old\n" };
+        const oldUp = tree(held);
+        const newUp = tree({ "run.sh": "new\n" });
+        const local = tree(held);
+        chmodSync(join(newUp, "run.sh"), newMode);
+        if (oldMode !== null)
+          for (const dir of [oldUp, local]) chmodSync(join(dir, "run.sh"), oldMode);
 
-    const report = sync({ oldDir: oldUp, newDir: newUp, localDir: local });
+        const report = sync({ oldDir: oldUp, newDir: newUp, localDir: local });
 
-    expect(report.written).toEqual([{ kind: oldMode === null ? "added" : "updated", rel: "run.sh" }]);
-    expect(statSync(join(local, "run.sh")).mode & 0o777).toBe(newMode);
-  }));
+        expect(report.written).toEqual([
+          { kind: oldMode === null ? "added" : "updated", rel: "run.sh" },
+        ]);
+        expect(statSync(join(local, "run.sh")).mode & 0o777).toBe(newMode);
+      }),
+  );
 
   test("forks are reported largest first by changed lines, and a mode-only fork is marked", () => {
     const body = { "a.md": "one\n", "b.md": "one\ntwo\nthree\n", "run.sh": "echo\n" };
@@ -1421,7 +1766,13 @@ describe("syncComponent", () => {
       "tools/extra.ts": "the port wrote this\n",
     });
 
-    const report = sync({ oldDir: oldUp, newDir: newUp, localDir: local, exclude: ["docs/"], carriedElsewhere: ["kit/k.md"] });
+    const report = sync({
+      oldDir: oldUp,
+      newDir: newUp,
+      localDir: local,
+      exclude: ["docs/"],
+      carriedElsewhere: ["kit/k.md"],
+    });
 
     expect(report.portOnly).toEqual(["tools/extra.ts"]);
   });
@@ -1464,11 +1815,21 @@ describe("syncComponent", () => {
     const good = "---\nname: a\ndescription: fine\n---\nbody\n";
     const bad = "---\nname: a\ndescription: [unclosed\n---\nbody\n";
     const [models, leads] = [loadModels(), loadLeadLines()];
-    const derive = (rel, text) => deriveSkill(join("plugins/pstack/skills", rel), text, models, leads);
-    const upstreamDeletedIt = { old: { "a/SKILL.md": good, "b/SKILL.md": bad }, new: { "a/SKILL.md": good } };
+    const derive = (rel, text) =>
+      deriveSkill(join("plugins/pstack/skills", rel), text, models, leads);
+    const upstreamDeletedIt = {
+      old: { "a/SKILL.md": good, "b/SKILL.md": bad },
+      new: { "a/SKILL.md": good },
+    };
     const upstreamFixedIt = { old: { "a/SKILL.md": bad }, new: { "a/SKILL.md": good } };
     for (const { old, new: next } of [upstreamDeletedIt, upstreamFixedIt]) {
-      const report = sync({ oldDir: tree(old), newDir: tree(next), localDir: tree({ "a/SKILL.md": good }), derive, dryRun: true });
+      const report = sync({
+        oldDir: tree(old),
+        newDir: tree(next),
+        localDir: tree({ "a/SKILL.md": good }),
+        derive,
+        dryRun: true,
+      });
 
       expect(report.unchanged).toBe(1);
       expect(report.written).toEqual([]);
@@ -1479,9 +1840,13 @@ describe("syncComponent", () => {
   test("a merge git reports as conflicted without printing markers fails the run naming the file", () => {
     const bin = tree({ git: "#!/bin/sh\nexit 1\n" });
     chmodSync(join(bin, "git"), 0o755);
-    const [oldDir, newDir, localDir] = [tree({ "s.md": "old\n" }), tree({ "s.md": "new\n" }), tree({ "s.md": "port\n" })];
+    const [oldDir, newDir, localDir] = [
+      tree({ "s.md": "old\n" }),
+      tree({ "s.md": "new\n" }),
+      tree({ "s.md": "port\n" }),
+    ];
     const script = [
-      `import { syncComponent } from ${JSON.stringify(join(import.meta.dir, "../tools/sync.mjs"))};`,
+      `import { syncComponent } from ${JSON.stringify(join(import.meta.dirname, "../tools/sync.mjs"))};`,
       `syncComponent(${JSON.stringify({ oldDir, newDir, localDir, rules: [] })});`,
     ].join("\n");
 
@@ -1491,46 +1856,79 @@ describe("syncComponent", () => {
     });
 
     expect(result.status).toBe(1);
-    expect(result.stderr).toContain("s.md: git merge-file reported conflicts (exit 1) but printed no markers");
+    expect(result.stderr).toContain(
+      "s.md: git merge-file reported conflicts (exit 1) but printed no markers",
+    );
     expect(readFileSync(join(localDir, "s.md"), "utf8")).toBe("port\n");
   });
 });
 
 describe("sync CLI", () => {
   const declareS = (kind) => ({
-    "plugins/pstack/skills/s.md": { kind, why: "Fixture fork.", since: "0.9.48", upstream: "not-proposed" },
+    "plugins/pstack/skills/s.md": {
+      kind,
+      why: "Fixture fork.",
+      since: "0.9.48",
+      upstream: "not-proposed",
+    },
   });
 
   function cli({ oldText, newText, localText, forks = {} }) {
     const root = tree({});
     const upstream = join(root, "upstream");
     mkdirSync(join(upstream, "skills"), { recursive: true });
-    const git = (...args) => execFileSync("git", ["-C", upstream, ...args], { encoding: "utf8", env: process.env }).trim();
+    const git = (...args) =>
+      execFileSync("git", ["-C", upstream, ...args], { encoding: "utf8", env: process.env }).trim();
     git("init", "-b", "main");
     const commit = (text) => {
       writeFileSync(join(upstream, "skills/s.md"), text);
       git("add", ".");
-      git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "--allow-empty", "-m", "update");
+      git(
+        "-c",
+        "user.name=Fixture",
+        "-c",
+        "user.email=fixture@example.invalid",
+        "commit",
+        "--allow-empty",
+        "-m",
+        "update",
+      );
       return git("rev-parse", "HEAD");
     };
     const oldSha = commit(oldText);
     const newSha = commit(newText);
 
     const port = join(root, "port");
-    for (const file of ["sync.mjs", "generate.mjs", "plugin.mjs", "runtimes.mjs", "validate-skills.mjs", "substitutions.json"]) {
-      cpSync(join(import.meta.dir, "../tools", file), join(port, "tools", file));
+    for (const file of [
+      "sync.mjs",
+      "generate.mjs",
+      "model-policy.mjs",
+      "plugin.mjs",
+      "runtimes.mjs",
+      "validate-skills.mjs",
+      "substitutions.json",
+    ]) {
+      cpSync(join(import.meta.dirname, "../tools", file), join(port, "tools", file));
     }
-    symlinkSync(join(import.meta.dir, "../node_modules"), join(port, "node_modules"));
-    cpSync(join(import.meta.dir, "../plugins/pstack/models.json"), join(port, "plugins/pstack/models.json"));
+    symlinkSync(join(import.meta.dirname, "../node_modules"), join(port, "node_modules"));
+    cpSync(
+      join(import.meta.dirname, "../plugins/pstack/models.json"),
+      join(port, "plugins/pstack/models.json"),
+    );
     mkdirSync(join(port, "plugins/pstack/skills"));
     mkdirSync(join(port, "plugins/pstack/skills/setup-pstack/scripts"), { recursive: true });
-    cpSync(join(import.meta.dir, "../plugins/pstack/skills/setup-pstack/scripts/t3-sheet.mjs"), join(port, "plugins/pstack/skills/setup-pstack/scripts/t3-sheet.mjs"));
+    cpSync(
+      join(import.meta.dirname, "../plugins/pstack/skills/setup-pstack/scripts/t3-sheet.mjs"),
+      join(port, "plugins/pstack/skills/setup-pstack/scripts/t3-sheet.mjs"),
+    );
     writeFileSync(join(port, "plugins/pstack/skills/s.md"), localText);
     for (const runtime of RUNTIMES) {
       mkdirSync(join(port, runtime.tools, ".."), { recursive: true });
       writeFileSync(join(port, runtime.tools), `${runtime.notesHeader}\n|-------|----------|\n`);
     }
-    for (const { skill } of JSON.parse(readFileSync(join(port, "plugins/pstack/models.json"), "utf8")).roles) {
+    for (const { skill } of JSON.parse(
+      readFileSync(join(port, "plugins/pstack/models.json"), "utf8"),
+    ).roles) {
       mkdirSync(join(port, "plugins/pstack/skills", skill), { recursive: true });
       writeFileSync(join(port, "plugins/pstack/skills", skill, "SKILL.md"), "");
     }
@@ -1538,7 +1936,9 @@ describe("sync CLI", () => {
       join(port, "tools/upstream.json"),
       JSON.stringify({
         remote: upstream,
-        components: { kit: { upstreamPath: "skills", localPath: "plugins/pstack/skills", sha: oldSha } },
+        components: {
+          kit: { upstreamPath: "skills", localPath: "plugins/pstack/skills", sha: oldSha },
+        },
       }),
     );
     writeFileSync(join(port, "tools/forks.json"), JSON.stringify({ kit: forks }));
@@ -1550,13 +1950,18 @@ describe("sync CLI", () => {
         env: { ...process.env, TMPDIR: scratch },
       });
     const run = (...flags) => runAt(newSha, ...flags);
-    const pin = () => JSON.parse(readFileSync(join(port, "tools/upstream.json"), "utf8")).components.kit.sha;
+    const pin = () =>
+      JSON.parse(readFileSync(join(port, "tools/upstream.json"), "utf8")).components.kit.sha;
     const local = () => readFileSync(join(port, "plugins/pstack/skills/s.md"), "utf8");
     return { oldSha, newSha, scratch, run, runAt, pin, local, port };
   }
 
   test("a denylist failure exits 1 and removes its scratch clone", () => {
-    const { run, scratch } = cli({ oldText: "one\n", newText: "run control-cli\n", localText: "one\n" });
+    const { run, scratch } = cli({
+      oldText: "one\n",
+      newText: "run control-cli\n",
+      localText: "one\n",
+    });
 
     const result = run("--dry-run");
 
@@ -1581,7 +1986,11 @@ describe("sync CLI", () => {
   });
 
   test("a denylist hit leaves the pin and the tree alone", () => {
-    const { run, pin, local, oldSha } = cli({ oldText: "one\n", newText: "run control-cli\n", localText: "one\n" });
+    const { run, pin, local, oldSha } = cli({
+      oldText: "one\n",
+      newText: "run control-cli\n",
+      localText: "one\n",
+    });
 
     const result = run();
 
@@ -1591,8 +2000,15 @@ describe("sync CLI", () => {
   });
 
   test("a dry run prints each fork's changed lines with a total, then the port-only files", () => {
-    const { run } = cli({ oldText: "one\n", newText: "one\n", localText: "one\nport\n", forks: declareS("policy") });
-    const models = JSON.parse(readFileSync(join(import.meta.dir, "../plugins/pstack/models.json"), "utf8"));
+    const { run } = cli({
+      oldText: "one\n",
+      newText: "one\n",
+      localText: "one\nport\n",
+      forks: declareS("policy"),
+    });
+    const models = JSON.parse(
+      readFileSync(join(import.meta.dirname, "../plugins/pstack/models.json"), "utf8"),
+    );
     const roleSkills = [...new Set(models.roles.map((r) => r.skill))];
 
     const result = run("--dry-run");
@@ -1608,21 +2024,33 @@ describe("sync CLI", () => {
       "setup-pstack/scripts/t3-sheet.mjs",
     ];
     expect(result.stdout).toContain(`\nport-only: ${portOnly.length} files\n`);
-    for (const rel of portOnly) expect(result.stdout).toContain(`\n  plugins/pstack/skills/${rel}\n`);
+    for (const rel of portOnly)
+      expect(result.stdout).toContain(`\n  plugins/pstack/skills/${rel}\n`);
   });
 
   test("a dry run prints mode in place of a count for a mode-only fork", () => {
-    const { run, port } = cli({ oldText: "one\n", newText: "one\n", localText: "one\n", forks: declareS("port-feature") });
+    const { run, port } = cli({
+      oldText: "one\n",
+      newText: "one\n",
+      localText: "one\n",
+      forks: declareS("port-feature"),
+    });
     chmodSync(join(port, "plugins/pstack/skills/s.md"), 0o755);
 
     const result = run("--dry-run");
 
     expect(result.status).toBe(0);
-    expect(result.stdout).toContain("  mode port-feature plugins/pstack/skills/s.md\n     0 total changed lines\n");
+    expect(result.stdout).toContain(
+      "  mode port-feature plugins/pstack/skills/s.md\n     0 total changed lines\n",
+    );
   });
 
   test("an undeclared fork fails the dry run and the real run naming its path, and nothing is written", () => {
-    const { run, pin, local, oldSha } = cli({ oldText: "one\n", newText: "two\n", localText: "port\n" });
+    const { run, pin, local, oldSha } = cli({
+      oldText: "one\n",
+      newText: "two\n",
+      localText: "port\n",
+    });
     const failure = "FAIL: forks with no entry under kit in tools/forks.json";
 
     const dryRun = run("--dry-run");
@@ -1630,14 +2058,20 @@ describe("sync CLI", () => {
 
     for (const result of [dryRun, actual]) {
       expect(result.status).toBe(1);
-      expect(result.stderr).toContain(`${failure}; declare each or restore upstream's form, then rerun:\n  plugins/pstack/skills/s.md\n`);
+      expect(result.stderr).toContain(
+        `${failure}; declare each or restore upstream's form, then rerun:\n  plugins/pstack/skills/s.md\n`,
+      );
     }
     expect(pin()).toBe(oldSha);
     expect(local()).toBe("port\n");
   });
 
   test("a path collision fails the dry run and the real run naming its path, and nothing is written", () => {
-    const { run, pin, oldSha, port } = cli({ oldText: "one\n", newText: "two\n", localText: "one\n" });
+    const { run, pin, oldSha, port } = cli({
+      oldText: "one\n",
+      newText: "two\n",
+      localText: "one\n",
+    });
     const skill = join(port, "plugins/pstack/skills/s.md");
     rmSync(skill);
     mkdirSync(skill);
@@ -1655,8 +2089,12 @@ describe("sync CLI", () => {
   });
 
   test("a stray argument fails naming it above the usage line, and nothing is written or pinned", () => {
-    const { run, pin, local, oldSha } = cli({ oldText: "one\n", newText: "two\n", localText: "one\n" });
-    const usage = "usage: bun tools/sync.mjs <kit> <new-sha> [--dry-run]\n";
+    const { run, pin, local, oldSha } = cli({
+      oldText: "one\n",
+      newText: "two\n",
+      localText: "one\n",
+    });
+    const usage = "usage: node tools/sync.mjs <kit> <new-sha> [--dry-run]\n";
 
     for (const [flags, named] of [
       [["--dry"], 'unexpected argument: "--dry"\n'],
@@ -1673,7 +2111,12 @@ describe("sync CLI", () => {
   });
 
   test("a declaration whose path is no longer forked warns and passes on a sync to a new SHA", () => {
-    const { run } = cli({ oldText: "one\n", newText: "one\n", localText: "one\n", forks: declareS("policy") });
+    const { run } = cli({
+      oldText: "one\n",
+      newText: "one\n",
+      localText: "one\n",
+      forks: declareS("policy"),
+    });
 
     const result = run("--dry-run");
 
@@ -1684,7 +2127,12 @@ describe("sync CLI", () => {
   });
 
   test("a declaration whose path is not forked at the pinned SHA fails the dry run and the real run", () => {
-    const { runAt, oldSha } = cli({ oldText: "one\n", newText: "one\n", localText: "one\n", forks: declareS("policy") });
+    const { runAt, oldSha } = cli({
+      oldText: "one\n",
+      newText: "one\n",
+      localText: "one\n",
+      forks: declareS("policy"),
+    });
 
     for (const result of [runAt(oldSha, "--dry-run"), runAt(oldSha)]) {
       expect(result.status).toBe(1);
@@ -1712,16 +2160,26 @@ describe("sync CLI", () => {
   test.each([
     ["an abbreviated pin and a full argument", 7, 40],
     ["a full pin and an abbreviated argument", 40, 7],
-  ])("the pinned-SHA check resolves both commits, so %s still count as the pin", (_, pinLength, argLength) => {
-    const { runAt, oldSha, port } = cli({ oldText: "one\n", newText: "one\n", localText: "one\n", forks: declareS("policy") });
-    const upstreamJson = join(port, "tools/upstream.json");
-    const upstream = JSON.parse(readFileSync(upstreamJson, "utf8"));
-    upstream.components.kit.sha = oldSha.slice(0, pinLength);
-    writeFileSync(upstreamJson, JSON.stringify(upstream));
+  ])(
+    "the pinned-SHA check resolves both commits, so %s still count as the pin",
+    (_, pinLength, argLength) => {
+      const { runAt, oldSha, port } = cli({
+        oldText: "one\n",
+        newText: "one\n",
+        localText: "one\n",
+        forks: declareS("policy"),
+      });
+      const upstreamJson = join(port, "tools/upstream.json");
+      const upstream = JSON.parse(readFileSync(upstreamJson, "utf8"));
+      upstream.components.kit.sha = oldSha.slice(0, pinLength);
+      writeFileSync(upstreamJson, JSON.stringify(upstream));
 
-    const result = runAt(oldSha.slice(0, argLength), "--dry-run");
+      const result = runAt(oldSha.slice(0, argLength), "--dry-run");
 
-    expect(result.status).toBe(1);
-    expect(result.stderr).toContain("FAIL: tools/forks.json declares paths under kit that are not forked at the pinned SHA");
-  });
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain(
+        "FAIL: tools/forks.json declares paths under kit that are not forked at the pinned SHA",
+      );
+    },
+  );
 });

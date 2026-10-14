@@ -1,4 +1,4 @@
-import { expect, it } from "bun:test";
+import { expect, it } from "vitest";
 import { spawnSync } from "node:child_process";
 import {
   chmodSync,
@@ -42,7 +42,7 @@ function fixture(
     gh,
     `#!${process.execPath}
 import { readFileSync, writeFileSync } from 'node:fs';
-import { fakeGitHub } from ${JSON.stringify(join(import.meta.dir, "shipping.test-helper.ts"))};
+import { fakeGitHub } from ${JSON.stringify(join(import.meta.dirname, "shipping.test-helper.ts"))};
 const state = JSON.parse(readFileSync(process.env.SHIPPING_STATE, 'utf8'));
 const response = fakeGitHub(state, process.argv.slice(2));
 writeFileSync(process.env.SHIPPING_STATE, JSON.stringify(state));
@@ -53,7 +53,7 @@ console.log(JSON.stringify(response));
   const entry = join(dir, "entry.ts");
   writeFileSync(
     entry,
-    `import { main } from ${JSON.stringify(join(import.meta.dir, "shipping-cli.ts"))}; process.exitCode = await main(process.argv.slice(2));`
+    `import { main } from ${JSON.stringify(join(import.meta.dirname, "shipping-cli.ts"))}; process.exitCode = await main(process.argv.slice(2));`
   );
   const run = (...args: string[]) => {
     const result = spawnSync(process.execPath, [entry, ...args], {

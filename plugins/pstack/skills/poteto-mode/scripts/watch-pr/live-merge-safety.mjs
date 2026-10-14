@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
 
 if (process.argv.slice(2).join(' ') !== '--live-disposable') {
-  console.error('Usage: bun watch-pr/live-merge-safety.mjs --live-disposable');
+  console.error('Usage: node watch-pr/live-merge-safety.mjs --live-disposable');
   process.exit(2);
 }
 const gh = (...args) => execFileSync('gh', args, {
@@ -23,7 +23,7 @@ const repository = `${login}/${name}`;
 const path = `repos/${repository}`;
 const shippingCli = fileURLToPath(new URL('./ship-pr', import.meta.url));
 const scratch = mkdtempSync(join(tmpdir(), 'pstack-live-shipping-'));
-const ship = (...args) => JSON.parse(execFileSync('bun', [shippingCli, ...args], { encoding: 'utf8' }));
+const ship = (...args) => JSON.parse(execFileSync(process.execPath, [shippingCli, ...args], { encoding: 'utf8' }));
 function inspect(pr) {
   const result = ship('inspect', '--repo', repository, '--pr', String(pr));
   assert.equal(result.kind, 'inspected');

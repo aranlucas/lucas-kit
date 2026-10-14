@@ -133,14 +133,18 @@ function raw(value: unknown): string {
   }
 }
 function missing(path: string, value?: unknown): never {
+  if (value === undefined) {
+    throw new WatcherQueryError({
+      kind: "missing-key",
+      retryable: true,
+      detail: `missing ${path}`,
+    });
+  }
   throw new WatcherQueryError({
     kind: "missing-key",
     retryable: true,
-    detail:
-      value === undefined
-        ? `missing ${path}`
-        : `invalid ${path}: ${raw(value)}`,
-    ...(value === undefined ? {} : { rawValue: raw(value) }),
+    detail: `invalid ${path}: ${raw(value)}`,
+    rawValue: raw(value),
   });
 }
 function advanceCursor(cursors: Set<string>, after: string, label: string) {
@@ -468,6 +472,8 @@ export function buildReviewThreads(
     else keys.add(key);
   }
   const passes = keys.size > 0 ? keys.size : keyless ? 1 : 0;
+  // Caller-owned getters require all resolved predicates before the mapping reads.
+  // oxlint-disable-next-line anti-slop/no-array-filter-map -- Keep the predicate-before-mapper boundary.
   return threads
     .filter((thread) => !thread.resolved)
     .map(({ id, firstComment }) => ({
@@ -539,7 +545,10 @@ function graphqlArgs(
 }
 
 export class GhGitHubReader implements T.GitHubReader {
-  constructor(private readonly deadline: WatchDeadline) {}
+  private readonly deadline: WatchDeadline;
+  constructor(deadline: WatchDeadline) {
+    this.deadline = deadline;
+  }
   private run(argv: readonly [string, ...string[]]): Promise<CommandResult> {
     return run(argv, this.deadline);
   }

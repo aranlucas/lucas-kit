@@ -68,7 +68,7 @@ The Live column records the end-to-end run on real Pi with `PSTACK_PI_LIVE=1` (`
 | C02 | `origin` | Same CLI through `bash` | native | pi-tools.md Vendored scripts | n/a |
 | C03 | `gt` | Same CLI through `bash` | native | pi-tools.md Vendored scripts | n/a |
 | C04 | `claude`/`codex` CLI | Prose only (`claude mcp list`), mapped in the `why` note | mapping | pi-tools.md `why` note | n/a |
-| C05 | `bun` scripts | Same through `bash` | native | pi-tools.md Vendored scripts | n/a |
+| C05 | Node.js scripts | Same through `bash` | native | pi-tools.md Vendored scripts | n/a |
 | C06 | `node` scripts | Same through `bash` | native | pi-tools.md Vendored scripts | n/a |
 | X01a | Family names `opus`, `fable`, `sonnet`, `haiku` on an Anthropic session or any provider without its own table | The `anthropic` table of `models.json` maps them to `anthropic/*` IDs | extension | `a family name resolves in the table of the parent's provider, and in the fallback table on any other` | n/a |
 | X01b | Family names on a ChatGPT sign-in (`openai`, Pi's Sign in with ChatGPT) | The `openai` table maps them to GPT-6 models of the same tiers as the Codex defaults | extension | `a family name resolves in the table of the parent's provider, and in the fallback table on any other` | VERIFIED |

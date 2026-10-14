@@ -34,12 +34,17 @@ function piInvocation(): Settings["pi"] {
     return { command: process.execPath, args: [script] };
   }
   const exe = basename(process.execPath).toLowerCase();
-  return /^(node|bun)(\.exe)?$/.test(exe) ? { command: "pi", args: [] } : { command: process.execPath, args: [] };
+  return /^(node|bun)(\.exe)?$/.test(exe)
+    ? { command: "pi", args: [] }
+    : { command: process.execPath, args: [] };
 }
 
 // readDepth is called on each use: pi parses extension flags after it loads
 // the extension.
-export function defaultSettings(readDepth: () => number, env: NodeJS.ProcessEnv = process.env): Settings {
+export function defaultSettings(
+  readDepth: () => number,
+  env: NodeJS.ProcessEnv = process.env,
+): Settings {
   const pluginRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
   return {
     pluginRoot,
@@ -90,12 +95,18 @@ export function readSheet(agentDir: string): Sheet | undefined {
 const modelsConfig = Type.Object({
   available: Type.Array(Type.String()),
   efforts: Type.Array(Type.String()),
-  pi: Type.Object({ fallback: Type.String(), models: Type.Record(Type.String(), Type.Record(Type.String(), Type.String())) }),
+  pi: Type.Object({
+    fallback: Type.String(),
+    models: Type.Record(Type.String(), Type.Record(Type.String(), Type.String())),
+  }),
 });
 
 function readModels(modelsFile: string): Static<typeof modelsConfig> {
   const raw: unknown = JSON.parse(readFileSync(modelsFile, "utf8"));
-  if (!Value.Check(modelsConfig, raw)) throw new Error(`${modelsFile} is not a pstack models file: it needs available[], efforts[] and pi.{fallback, models}.`);
+  if (!Value.Check(modelsConfig, raw))
+    throw new Error(
+      `${modelsFile} is not a pstack models file: it needs available[], efforts[] and pi.{fallback, models}.`,
+    );
   return raw;
 }
 
@@ -117,10 +128,13 @@ export function resolveModel(
   // Family names follow the provider the session is signed in to, so a ChatGPT
   // subscription gets OpenAI models without any configuration.
   const provider = parentModel?.split("/")[0] ?? "";
-  const table = models.pi.models[Object.hasOwn(models.pi.models, provider) ? provider : models.pi.fallback];
+  const table =
+    models.pi.models[Object.hasOwn(models.pi.models, provider) ? provider : models.pi.fallback];
   const id = sheet?.piModels.get(requested) ?? table[requested];
   if (!id) {
-    throw new Error(`No Pi model mapped for "${requested}": add a "pi models: ${requested}=<provider>/<id>" line to the override sheet.`);
+    throw new Error(
+      `No Pi model mapped for "${requested}": add a "pi models: ${requested}=<provider>/<id>" line to the override sheet.`,
+    );
   }
   return id;
 }
@@ -133,7 +147,7 @@ interface AgentDefinition {
   effort?: string;
 }
 
-export function frontmatter(text: string): { fields: Map<string, string>; body: string } {
+export function frontmatter(text: string) {
   const m = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/.exec(text);
   const fields = new Map<string, string>();
   for (const line of (m?.[1] ?? "").split(/\r?\n/)) {
@@ -154,13 +168,17 @@ function parseAgentFile(type: string, text: string, efforts: string[]): AgentDef
 
 // Claude Code registers each plugin agent file as pstack:<file name>, beside
 // the built-in general-purpose type, which has no agent file.
-export function loadAgentTypes(settings: Pick<Settings, "pluginRoot" | "modelsFile">): Map<string, AgentDefinition> {
+export function loadAgentTypes(
+  settings: Pick<Settings, "pluginRoot" | "modelsFile">,
+): Map<string, AgentDefinition> {
   const { efforts } = readModels(settings.modelsFile);
   const types = new Map<string, AgentDefinition>([[GENERAL_PURPOSE, { body: "" }]]);
   for (const dir of ["agents", "effort-agents"]) {
     const full = join(settings.pluginRoot, dir);
     if (!existsSync(full)) continue;
-    for (const file of readdirSync(full).filter((f) => f.endsWith(".md")).sort()) {
+    for (const file of readdirSync(full)
+      .filter((f) => f.endsWith(".md"))
+      .sort()) {
       const type = `pstack:${basename(file, ".md")}`;
       types.set(type, parseAgentFile(type, readFileSync(join(full, file), "utf8"), efforts));
     }

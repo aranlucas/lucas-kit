@@ -196,7 +196,7 @@ for (const pr of prSections) {
 	}
 
 	const total = boxes(pr.body).length;
-	const cells = SUB_BLOCKS.filter((s) => s !== "Depends on.").map((s) => `${s.replace(/[ ,.]+/g, "-").replace(/-$/, "").toLowerCase()}=${counts[s] ?? 0}`);
+	const cells = SUB_BLOCKS.flatMap((s) => s === "Depends on." ? [] : [`${s.replace(/[ ,.]+/g, "-").replace(/-$/, "").toLowerCase()}=${counts[s] ?? 0}`]);
 	report.push(`${pr.title}  boxes=${total}  ${cells.join(" ")}`);
 }
 

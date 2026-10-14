@@ -1,14 +1,14 @@
-import { describe, expect, setDefaultTimeout, test } from "bun:test";
+import { describe, expect, vi, test } from "vitest";
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-// check-plan.mjs runs under node; a starved CI runner took over bun's 5 s
-// default and the test read the killed child as code null (run 36492567721).
-setDefaultTimeout(30_000);
+// Subprocess fixtures need a generous timeout on a starved CI runner
+// (regression from run 36492567721).
+vi.setConfig({ testTimeout: 30_000 });
 
-const mode = join(import.meta.dir, "../plugins/pstack/skills/poteto-mode");
+const mode = join(import.meta.dirname, "../plugins/pstack/skills/poteto-mode");
 const playbook = readFileSync(join(mode, "playbooks/multi-phase-plan.md"), "utf8");
 const template = playbook.match(/^````markdown\n([\s\S]*?)^````$/m);
 if (!template) throw new Error("Multi-phase playbook has no plan skeleton");
