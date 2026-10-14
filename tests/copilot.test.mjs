@@ -111,9 +111,9 @@ describe("Copilot setup questions", () => {
   const roles = models.roles.map((r) => r.role);
 
   test("step 6's sheet shape has a line for every role in models.json", () => {
-    const sheetShape = skill.slice(skill.indexOf("### 6. Write the override sheet"), skill.indexOf("### 7."));
-    const shaped = [...sheetShape.matchAll(/^([a-z][a-z ,-]*): /gm)].map((m) => m[1]).filter((r) => r !== "session hook" && r !== "default effort");
-    expect(shaped).toEqual(roles);
+    const sheetInstructions = skill.slice(skill.indexOf("### 6. Write the override sheet"), skill.indexOf("### 7."));
+    const documentedRoles = [...sheetInstructions.matchAll(/^([a-z][a-z ,-]*): /gm)].map((m) => m[1]).filter((r) => r !== "session hook" && r !== "default effort");
+    expect(documentedRoles).toEqual(roles);
   });
 
   test("the roles-by-tier table lists every role once, under its tier", () => {

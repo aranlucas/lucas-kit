@@ -409,7 +409,7 @@ export function regions(models) {
       file: skillFile("interrogate"),
       name: "reviewer table",
       locate: tableRows("| Subagent | Default model |", "| Reviewer "),
-      render: () => reviewers.map((m, i) => `| Reviewer ${String.fromCharCode(65 + i)} | ${code(m)} |`),
+      render: () => reviewers.map((m, i) => `| Reviewer ${String.fromCodePoint(65 + i)} | ${code(m)} |`),
     },
     ...[...rolesBySkill].map(([skill]) => ({
       file: skillFile(skill),
@@ -854,7 +854,7 @@ const HOOKS_FILE = Type.Object({ hooks: Type.Record(Type.String(), Type.Array(MA
 
 // typebox reports an unknown key twice, as a false schema at the key and as
 // additionalProperties on its object; the second names every such key.
-function shapeFaults(schema, value, subject) {
+function schemaFaults(schema, value, subject) {
   return [...Value.Errors(schema, value)]
     .filter((error) => error.keyword !== "boolean")
     .map((error) =>
@@ -871,7 +871,7 @@ function shapeFaults(schema, value, subject) {
 // The root is the variable the runtime exports with the plugin's directory.
 export function validateHooks(hooksJson, { statOf, file = "hooks/hooks.json", root = "CLAUDE_PLUGIN_ROOT" }) {
   const raw = JSON.parse(hooksJson);
-  const faults = shapeFaults(HOOKS_FILE, raw, "file");
+  const faults = schemaFaults(HOOKS_FILE, raw, "file");
   if (faults.length) throw new Error(`${file}:\n  ${faults.join("\n  ")}`);
   for (const [event, groups] of Object.entries(raw.hooks)) {
     for (const hook of groups.flatMap((group) => group.hooks)) {
@@ -880,9 +880,9 @@ export function validateHooks(hooksJson, { statOf, file = "hooks/hooks.json", ro
         faults.push(`${event}: hook type "${hook.type}" is not one of ${Object.keys(HOOK_TYPES).join(", ")}`);
         continue;
       }
-      const shape = shapeFaults(schema, hook, "hook");
-      if (shape.length) {
-        faults.push(...shape.map((fault) => `${event}: ${fault}`));
+      const hookFaults = schemaFaults(schema, hook, "hook");
+      if (hookFaults.length) {
+        faults.push(...hookFaults.map((fault) => `${event}: ${fault}`));
         continue;
       }
       if (hook.type !== "command") continue;

@@ -164,7 +164,7 @@ export function pathSpellings(path, linksIn = symlinkTargets, stat = statSync) {
 // stay out: they extend a path by glob or expansion. `?` globs too, but it
 // also ends a question or a URL's path, and a false match costs only a hold.
 const BOUNDARY = new Set(Buffer.from("/\\\"' `:;),|&<>]}?!"));
-const DOT = ".".charCodeAt(0);
+const DOT = ".".codePointAt(0);
 const bounded = (text, at) => at === text.length || BOUNDARY.has(text[at]);
 function mentions(text, needle) {
   for (let at = text.indexOf(needle); at !== -1; at = text.indexOf(needle, at + 1)) {
