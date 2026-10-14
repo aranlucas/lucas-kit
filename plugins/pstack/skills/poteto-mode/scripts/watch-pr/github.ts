@@ -133,14 +133,18 @@ function raw(value: unknown): string {
   }
 }
 function missing(path: string, value?: unknown): never {
+  if (value === undefined) {
+    throw new WatcherQueryError({
+      kind: "missing-key",
+      retryable: true,
+      detail: `missing ${path}`,
+    });
+  }
   throw new WatcherQueryError({
     kind: "missing-key",
     retryable: true,
-    detail:
-      value === undefined
-        ? `missing ${path}`
-        : `invalid ${path}: ${raw(value)}`,
-    ...(value === undefined ? {} : { rawValue: raw(value) }),
+    detail: `invalid ${path}: ${raw(value)}`,
+    rawValue: raw(value),
   });
 }
 function advanceCursor(cursors: Set<string>, after: string, label: string) {

@@ -27,7 +27,6 @@
     "unicorn/no-useless-undefined": "off",
     "unicorn/consistent-function-scoping": "off",
     "anti-slop/no-array-filter-map": "off",
-    "anti-slop/no-conditional-empty-object-spread": "off",
     "anti-slop/no-known-value-widening": "off",
     "anti-slop/no-runtime-typeof": "off",
     "anti-slop/no-unknown-parameters": "off",

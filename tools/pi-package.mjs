@@ -42,16 +42,29 @@ function homebrewRoot() {
 export function findPiPackage() {
   if (process.env.PI_PACKAGE_DIR) return process.env.PI_PACKAGE_DIR;
   const roots = [npmRoot(), homebrewRoot(), ...bunRoots()];
-  return roots.filter(Boolean).map((root) => join(root, "@earendil-works/pi-coding-agent")).find((dir) => existsSync(join(dir, "package.json"))) ?? null;
+  return (
+    roots
+      .filter(Boolean)
+      .map((root) => join(root, "@earendil-works/pi-coding-agent"))
+      .find((dir) => existsSync(join(dir, "package.json"))) ?? null
+  );
 }
 
 // npm nests the package's dependencies in its own node_modules; bun's global
 // directory is flat, so there they sit beside the package's scope.
+/**
+ * @param {string} piDir
+ * @param {string} name
+ */
 export function piDependency(piDir, name) {
-  return [join(piDir, "node_modules", name), join(piDir, "..", "..", name)].find(existsSync) ?? null;
+  return (
+    [join(piDir, "node_modules", name), join(piDir, "..", "..", name)].find(existsSync) ?? null
+  );
 }
 
+/** @param {string} piDir */
 export function piCompilerPaths(piDir) {
+  /** @param {string} name */
   const dep = (name) => piDependency(piDir, name) ?? join(piDir, "node_modules", name);
   return {
     typeRoots: [dep("@types")],
@@ -59,7 +72,9 @@ export function piCompilerPaths(piDir) {
     paths: {
       "@earendil-works/pi-coding-agent": ["dist/index.d.ts"],
       "@earendil-works/pi-ai": [join(dep("@earendil-works/pi-ai"), "dist/index.d.ts")],
-      "@earendil-works/pi-agent-core": [join(dep("@earendil-works/pi-agent-core"), "dist/index.d.ts")],
+      "@earendil-works/pi-agent-core": [
+        join(dep("@earendil-works/pi-agent-core"), "dist/index.d.ts"),
+      ],
       typebox: [join(dep("typebox"), "build/index.d.mts")],
       "typebox/*": [join(dep("typebox"), "build/*/index.d.mts")],
     },

@@ -40,6 +40,60 @@ function reported(read: CheckRead): ReportedChecks {
 const numbers = (stack: readonly PrContext[]): number[] =>
   stack.map((pr) => Number(pr.number));
 
+describe("missing and invalid query values", () => {
+  it("omits rawValue for a missing property", () => {
+    try {
+      parseFastCheck({ state: "SUCCESS", bucket: "pass" });
+      throw new Error("expected parser to throw");
+    } catch (error) {
+      if (!(error instanceof WatcherQueryError)) throw error;
+      expect(error.failure).toEqual({
+        kind: "missing-key",
+        retryable: true,
+        detail: "missing name",
+      });
+    }
+  });
+
+  it("keeps detail serialization before rawValue serialization", () => {
+    let serializations = 0;
+    const invalidName = {
+      toJSON() {
+        serializations += 1;
+        return serializations === 1 ? "detail" : "raw";
+      },
+    };
+    try {
+      parseFastCheck({ name: invalidName, state: "SUCCESS", bucket: "pass" });
+      throw new Error("expected parser to throw");
+    } catch (error) {
+      if (!(error instanceof WatcherQueryError)) throw error;
+      expect(error.failure).toEqual({
+        kind: "missing-key",
+        retryable: true,
+        detail: 'invalid name: "detail"',
+        rawValue: '"raw"',
+      });
+      expect(serializations).toBe(2);
+    }
+  });
+
+  it("reads fake replacement facts only after the first request", async () => {
+    let rereads = 0;
+    const reader = fakeReader({
+      facts: { headRefOid: "first" },
+      get factsOnReread() {
+        rereads += 1;
+        return { headRefOid: "replacement" };
+      },
+    });
+    expect((await reader.pullRequest(context)).headRefOid).toBe("first");
+    expect(rereads).toBe(0);
+    expect((await reader.pullRequest(context)).headRefOid).toBe("replacement");
+    expect(rereads).toBe(1);
+  });
+});
+
 describe("checks fallback chain", () => {
   it("uses a non-empty fast-path result without a rollup query", async () => {
     const reader = fakeReader({
