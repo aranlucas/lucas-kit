@@ -25,7 +25,8 @@ async function* jsonlLines(stream) {
   let rest = "";
   for await (const chunk of stream) {
     const parts = (rest + chunk).split("\n");
-    rest = parts.pop();
+    // The fixed-separator split always yields at least one segment, even for empty input.
+    rest = /** @type {string} */ (parts.pop());
     yield* parts;
   }
   if (rest) yield rest;
@@ -38,8 +39,11 @@ export function rethrowUnlessRemoved(error) {
   if (error.code !== "ENOENT") throw error;
 }
 
+/** @param {string} projectsDir @param {number} [maxDepth] */
 export function candidates(projectsDir, maxDepth = 2) {
+  /** @type {string[]} */
   const files = [];
+  /** @param {string} dir @param {number} depth */
   const walk = (dir, depth) => {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
       const full = join(dir, entry.name);
@@ -163,6 +167,7 @@ const READERS = [
   [() => true, (head, rest) => claudeOpening(prepend(head, rest))],
 ];
 
+/** @param {string} path @param {string} [workspace] */
 export async function openingPrompt(path, workspace) {
   const stream = createReadStream(path, { encoding: "utf8" });
   try {
@@ -176,6 +181,7 @@ export async function openingPrompt(path, workspace) {
   }
 }
 
+/** @param {string} projectsDir @param {string} fragment @param {string} [workspace] */
 export async function findTranscript(projectsDir, fragment, workspace = process.cwd()) {
   for (const { path } of candidates(projectsDir)) {
     try {
@@ -188,6 +194,7 @@ export async function findTranscript(projectsDir, fragment, workspace = process.
   return null;
 }
 
+/** @param {readonly string[]} argv */
 async function main(argv) {
   const [projectsDir, fragment, workspace] = argv;
   if (!projectsDir || !fragment || argv.length > 3) {

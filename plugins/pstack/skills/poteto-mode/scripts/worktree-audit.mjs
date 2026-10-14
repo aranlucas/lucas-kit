@@ -22,8 +22,26 @@ import { fileURLToPath } from "node:url";
 
 import { candidates, rethrowUnlessRemoved } from "../../reflect/scripts/find-transcript.mjs";
 
+/**
+ * @template Value
+ * @typedef {object} KnownFact
+ * @property {true} known
+ * @property {Value} value
+ */
+/**
+ * The frozen UNKNOWN object has no own value field; its optional type describes
+ * the undefined result of reading that absent field without adding one.
+ * @typedef {object} UnknownFact
+ * @property {false} known
+ * @property {undefined} [value]
+ */
+/** @template Value @typedef {KnownFact<Value> | Readonly<UnknownFact>} Fact */
+
+/** @template Value @param {Value} value @returns {KnownFact<Value>} */
 const known = (value) => ({ known: true, value });
+/** @type {Readonly<UnknownFact>} */
 const UNKNOWN = Object.freeze({ known: false });
+/** @template Value @param {() => Value} read @returns {Fact<Value>} */
 const probe = (read) => {
   try {
     return known(read());

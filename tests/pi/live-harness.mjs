@@ -8,11 +8,19 @@ import { lineSplitter } from "../../plugins/pstack/pi/child.ts";
 import { parseSheet } from "../../plugins/pstack/pi/config.ts";
 import { readEntries, sleep } from "./harness.mjs";
 
+/**
+ * @typedef {Pick<import("node:child_process").SpawnOptions, "cwd" | "env"> & {
+ *   model: string,
+ *   thinking?: string,
+ * }} PiRpcOptions
+ */
+
 export const MINUTE = 60_000;
 
 // The sheet and alias map the real-pi runs use: the shipped table of
 // PSTACK_PI_LIVE_PROVIDER (default openai), with any aliases the
 // `pi models:` line in PSTACK_PI_LIVE_MODELS names replaced.
+/** @param {string} root @param {string} [head] */
 export function liveModels(root, head = "") {
   const line = process.env.PSTACK_PI_LIVE_MODELS;
   const provider = process.env.PSTACK_PI_LIVE_PROVIDER ?? "openai";
@@ -39,6 +47,7 @@ export class PiRpc {
   nextId = 0;
   stderr = "";
 
+  /** @param {PiRpcOptions} options */
   constructor({ cwd, env, model, thinking = "low" }) {
     this.proc = spawn("pi", ["--mode", "rpc", "--model", model, "--thinking", thinking], {
       cwd,
@@ -55,10 +64,12 @@ export class PiRpc {
         } else this.events.push({ ...record, at: Date.now() });
       }).write,
     );
-    this.proc.stderr.on("data", (d) => (this.stderr += d));
+    this.proc.stderr.on("data", /** @param {Buffer | string} d */ (d) => (this.stderr += d));
+    /** @type {Promise<number | null>} */
     this.exited = new Promise((r) => this.proc.on("close", r));
   }
 
+  /** @param {string} type @param {Record<string, unknown>} [fields] */
   async command(type, fields = {}) {
     const id = `c${++this.nextId}`;
     const response = new Promise((r) => this.pending.set(id, r));
@@ -79,6 +90,7 @@ export class PiRpc {
   }
 
   // Sends a prompt and waits until the session is settled and idle.
+  /** @param {string} message @param {number} [timeoutMs] */
   async run(message, timeoutMs = 3 * MINUTE) {
     const from = this.events.length;
     await this.command("prompt", { message });
@@ -86,6 +98,7 @@ export class PiRpc {
     return from;
   }
 
+  /** @param {number} from @param {number} [timeoutMs] */
   async idle(from, timeoutMs = 3 * MINUTE) {
     await this.until(() => this.events.slice(from).some((e) => e.type === "agent_settled"), timeoutMs, "agent_settled");
     for (;;) {
@@ -95,14 +108,17 @@ export class PiRpc {
     }
   }
 
+  /** @param {number} [from] */
   messages(from = 0) {
     return this.events.slice(from).filter((e) => e.type === "message_end").map((e) => ({ ...e.message, at: e.at }));
   }
 
+  /** @param {number} [from] */
   notices(from = 0) {
     return this.messages(from).filter((m) => m.role === "custom" && m.customType === "pstack-agent");
   }
 
+  /** @param {string} name @param {number} [from] */
   toolResults(name, from = 0) {
     return this.messages(from).filter((m) => m.role === "toolResult" && m.toolName === name);
   }
@@ -119,6 +135,7 @@ export class PiRpc {
 }
 
 // The agent registry as persisted in the parent session: every snapshot per id, in order.
+/** @param {string} sessionFile */
 function registry(sessionFile) {
   const byId = new Map();
   for (const e of readEntries(sessionFile)) {
@@ -128,12 +145,14 @@ function registry(sessionFile) {
   return byId;
 }
 
+/** @param {string} sessionFile @param {string} description */
 export function agentByDescription(sessionFile, description) {
   const found = [...registry(sessionFile).values()].filter((snaps) => snaps[0].agent.description === description);
   expect(found).toHaveLength(1);
   return found[0];
 }
 
+/** @param {string} dir @param {string} sessionId */
 export function findSessionFile(dir, sessionId) {
   const files = readdirSync(dir, { recursive: true }).filter((f) => f.endsWith(`_${sessionId}.jsonl`));
   expect(files).toHaveLength(1);
@@ -173,9 +192,12 @@ export function processTable() {
     });
 }
 
+/** @param {number} pid */
 export function descendants(pid) {
   const table = processTable();
+  /** @type {ReturnType<typeof processTable>} */
   const found = [];
+  /** @param {number} p */
   const walk = (p) => {
     for (const row of table.filter((r) => r.ppid === p)) {
       found.push(row);

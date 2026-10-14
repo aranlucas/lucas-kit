@@ -19,8 +19,10 @@ const noNode = spawnSync("node", ["--version"]).status !== 0;
 
 const meta = JSON.stringify({ type: "bridge-session", sessionId: "abc" });
 const summary = JSON.stringify({ type: "summary", summary: "earlier work" });
+/** @param {string} text */
 const user = (text) =>
   JSON.stringify({ type: "user", message: { role: "user", content: [{ type: "text", text }] } });
+/** @param {string} text */
 const userString = (text) =>
   JSON.stringify({ type: "user", message: { role: "user", content: text } });
 const assistant = JSON.stringify({
@@ -28,6 +30,7 @@ const assistant = JSON.stringify({
   message: { role: "assistant", content: [{ type: "text", text: "ok" }] },
 });
 
+/** @type {string[]} */
 const fixtures = [];
 afterEach(() => {
   for (const root of fixtures.splice(0)) rmSync(root, { recursive: true, force: true });
@@ -39,6 +42,12 @@ function tempDir() {
   return dir;
 }
 
+/**
+ * @param {string} dir
+ * @param {string} rel
+ * @param {readonly string[]} lines
+ * @param {number} mtimeSeconds
+ */
 function transcript(dir, rel, lines, mtimeSeconds) {
   const path = join(dir, rel);
   mkdirSync(join(path, ".."), { recursive: true });
@@ -358,6 +367,7 @@ describe("find-transcript", () => {
         400,
       );
 
+      /** @param {string} cwd @param {readonly string[]} [args] */
       const run = (cwd, args = []) =>
         spawnSync("node", [script, sessions, "fix the failing tests", ...args], {
           cwd,
