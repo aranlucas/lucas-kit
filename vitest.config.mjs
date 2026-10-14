@@ -1,13 +1,7 @@
-import { join } from "node:path";
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
-  resolve: {
-    alias: {
-      "@test": join(import.meta.dirname, "test"),
-      "@": import.meta.dirname,
-    },
-  },
+  resolve: { tsconfigPaths: true },
   test: {
     include: ["test/**/*.test.mjs"],
     environment: "node",
