@@ -354,6 +354,7 @@ test.skipIf(noChmod)("an inaccessible default transcript root keeps a recently u
 });
 
 describe("lastChats matches a path as JSONL spells it, never a sibling's prefix", () => {
+  /** @param {string} path @param {string} cwd @param {readonly string[]} [spellings] */
   const scan = (path, cwd, spellings = [path]) => {
     const root = realpathSync(mkdtempSync(join(tmpdir(), "worktree-audit-chats-")));
     fixtures.push(root);

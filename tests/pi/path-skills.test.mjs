@@ -9,6 +9,10 @@ import { pluginRoot, useWorld } from "./harness.mjs";
 
 const setup = useWorld();
 
+/**
+ * @param {string} toolName
+ * @param {string} path
+ */
 const result = (toolName, path, extra = {}) => ({
   toolName,
   toolCallId: "t",
@@ -54,6 +58,7 @@ describe("paths: auto-load note", () => {
 });
 
 describe("paths: frontmatter that is not a JSON array of globs", () => {
+  /** @param {string} pathsLine */
   const register = (pathsLine) => {
     const root = mkdtempSync(join(tmpdir(), "pstack-paths-"));
     const file = join(root, "skills", "csv", "SKILL.md");
@@ -72,6 +77,7 @@ describe("paths: frontmatter that is not a JSON array of globs", () => {
   test("a line that is not a JSON array of strings throws naming the skill file", () => {
     for (const line of ["a/**, b/**", '"a/**"', '["a/**", 1]']) {
       const { file, error } = register(line);
+      assert.instanceOf(error, Error);
       expect(error?.message).toBe(`${file}: paths must be a JSON array of globs`);
     }
   });

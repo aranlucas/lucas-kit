@@ -40,7 +40,7 @@ function pathSkills(pluginRoot: string): PathSkill[] {
 
 // Claude Code loads a skill with `paths:` when a matching file is touched; Pi
 // has no such hook, so the first matching tool result carries a note instead.
-export function registerPathSkills(pi: ExtensionAPI, settings: Settings): void {
+export function registerPathSkills(pi: Pick<ExtensionAPI, "on">, settings: Pick<Settings, "pluginRoot">): void {
   const skills = pathSkills(settings.pluginRoot);
   const noted = new Set<string>();
   pi.on("tool_result", (event, ctx) => {

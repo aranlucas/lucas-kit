@@ -10,6 +10,10 @@ import { gitRepo, resultText, useWorld, waitFor } from "./harness.mjs";
 
 const setup = useWorld();
 
+/**
+ * @param {string} path
+ * @param {string} file
+ */
 function commitIn(path, file) {
   writeFileSync(join(path, file), "important\n");
   for (const args of [["add", file], ["-c", "user.email=a@b", "-c", "user.name=a", "commit", "-m", `add ${file}`]]) {
@@ -99,6 +103,7 @@ test("a reflog longer than an argument list allows still settles, and a git erro
     }
   })();
   expect(err).toBeInstanceOf(Error);
+  assert.instanceOf(err, Error);
   expect(err.message.length).toBeLessThan(400);
 });
 
@@ -140,11 +145,20 @@ test("a parent session already in a linked worktree gets its own child worktree"
 // Whatever sits at a retained path, only this agent's registered linked
 // worktree may run a writer or be cleaned up.
 describe("a path that is not the agent's linked worktree", () => {
+  /** @param {() => unknown} fn */
   const rejected = (fn) => expect(fn).toThrow(/not the expected linked worktree/);
+  /**
+   * @param {string} target
+   * @param {string} path
+   */
   const link = (target, path) => {
     mkdirSync(dirname(path), { recursive: true });
     symlinkSync(target, path, process.platform === "win32" ? "junction" : "dir");
   };
+  /**
+   * @param {ReturnType<typeof gitRepo>} git
+   * @param {ReturnType<typeof planWorktree>} wt
+   */
   const replaced = (git, wt) => {
     ensureWorktree(wt);
     git("worktree", "remove", wt.path);

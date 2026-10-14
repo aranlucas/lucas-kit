@@ -1,22 +1,28 @@
 #!/usr/bin/env node
 import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { join, resolve } from "node:path";
 import process from "node:process";
-import { fileURLToPath } from "node:url";
 
-const BUNDLED = resolve(dirname(fileURLToPath(import.meta.url)), "../playbooks");
+const BUNDLED = resolve(import.meta.dirname, "../playbooks");
 const CHANGE = /^\s*(?:[-*]|\d+\.)\s+\*\*(?:After|Before|Replace|In)\*\*\s+"([^"]+)"/;
 const CHANGE_VERB = /^\s*(?:[-*]|\d+\.)\s+\*\*(?:After|Before|Replace|In)\*\*/;
-const flat = (text) => text.replace(/\s+/g, " ");
+/** @param {string} text */
+const flat = (text) => text.replaceAll(/\s+/g, " ");
 
+/**
+ * @param {string} root
+ * @param {string} [bundled]
+ * @returns {string[]}
+ */
 export function checkPlaybooks(root, bundled = BUNDLED) {
   const dir = join(root, ".agents/playbooks");
   if (!existsSync(dir)) return [];
   const problems = [];
-  for (const name of readdirSync(dir).filter((file) => file.endsWith(".md")).sort()) {
+  for (const name of readdirSync(dir).filter((file) => file.endsWith(".md")).toSorted()) {
     const path = `.agents/playbooks/${name}`;
     const text = readFileSync(join(dir, name), "utf8").replace(/^\uFEFF/, "").replaceAll("\r\n", "\n");
     const front = text.match(/^---\n([\s\S]*?)\n---\n/)?.[1] ?? "";
+    /** @param {string} key */
     const field = (key) => front.match(new RegExp(`^${key}:[ \\t]*(.*)$`, "m"))?.[1].trim() ?? "";
     if (!field("when")) problems.push(`${path}: its frontmatter needs a "when:" line`);
     const bases = field("extends")
@@ -48,7 +54,7 @@ export function checkPlaybooks(root, bundled = BUNDLED) {
 function invokedDirectly() {
   if (!process.argv[1]) return false;
   try {
-    return fileURLToPath(import.meta.url) === realpathSync(process.argv[1]);
+    return import.meta.filename === realpathSync(process.argv[1]);
   } catch {
     return false;
   }

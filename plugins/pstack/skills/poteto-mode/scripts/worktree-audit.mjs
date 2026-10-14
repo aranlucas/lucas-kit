@@ -59,6 +59,7 @@ function git(cwd, ...args) {
     .replace(/\n+$/, "");
 }
 
+/** @param {readonly string[]} args @param {string} cwd */
 const runGh = (args, cwd) =>
   execFileSync("gh", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
 
@@ -165,7 +166,9 @@ export function pathSpellings(path, linksIn = symlinkTargets, stat = statSync) {
 // also ends a question or a URL's path, and a false match costs only a hold.
 const BOUNDARY = new Set(Buffer.from("/\\\"' `:;),|&<>]}?!"));
 const DOT = ".".codePointAt(0);
+/** @param {Buffer} text @param {number} at */
 const bounded = (text, at) => at === text.length || BOUNDARY.has(text[at]);
+/** @param {Buffer} text @param {Buffer} needle */
 function mentions(text, needle) {
   for (let at = text.indexOf(needle); at !== -1; at = text.indexOf(needle, at + 1)) {
     const end = at + needle.length;
@@ -175,6 +178,7 @@ function mentions(text, needle) {
 }
 
 // Git on Windows may spell a path with forward slashes while the session uses backslashes.
+/** @param {readonly string[]} spellings */
 function transcriptNeedles(spellings) {
   const forms = spellings.flatMap((spelling) => (/^(?:[a-z]:[\\/]|\\\\|\/\/)/i.test(spelling)
     ? [spelling.replaceAll("\\", "/"), spelling.replaceAll("/", "\\")]
@@ -183,8 +187,16 @@ function transcriptNeedles(spellings) {
 }
 
 // `spellings` maps each worktree path to every spelling a session could use.
+/** @typedef {[path: string, needles: Buffer[]]} PathNeedles */
+/**
+ * @param {readonly string[]} roots
+ * @param {ReadonlyMap<string, readonly string[]>} spellings
+ * @returns {Map<string, number>}
+ */
 export function lastChats(roots, spellings) {
+  /** @type {PathNeedles[]} */
   const needles = [...spellings].map(([path, forms]) => [path, transcriptNeedles(forms)]);
+  /** @type {Map<string, number>} */
   const latest = new Map();
   for (const { path: file } of roots.flatMap((root) => candidates(root, Infinity))) {
     let text, mtime;
@@ -293,6 +305,15 @@ function auditWorktree({ path, locked }, { repo, trunk, fetched, prs, chats, now
 
 // Discovery failures keep the table printing, but leave their facts unknown so
 // no row they touch can reach `safe`.
+/**
+ * @typedef {object} AuditOptions
+ * @property {string} repo
+ * @property {readonly string[]} transcripts
+ * @property {(args: readonly string[], cwd: string) => string} [gh]
+ * @property {(line: string) => void} [warn]
+ * @property {number} [now]
+ */
+/** @param {AuditOptions} options */
 export function audit({
   repo,
   transcripts,
