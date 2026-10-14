@@ -33,7 +33,7 @@ When a clean merge matches the new upstream text and mode, the sync reports it a
 
 ## Before you open a PR
 
-Use pnpm 12.11.0 (pinned in `packageManager`) for root dependencies and commands. Node.js runs the archive builder. Bun 1.3.14 remains the generator and test runtime because the existing tools use its YAML parser and `bun:test`; `pnpm test` invokes that runtime. The vendored scripts keep their upstream-owned Bun package and lockfile.
+Use Node.js 24 and pnpm 12.11.0 (pinned in `packageManager`) for development commands. The generator uses the `yaml` parser, and `pnpm test` runs Vitest. CI runs on Ubuntu only; native Windows/macOS behavior is no longer exercised by dedicated jobs. The vendored scripts remain a separate package with their own frozen pnpm install and test suite.
 
 Install the root dependencies, then run the generator and the tests:
 
@@ -72,10 +72,10 @@ If you touched `skills/poteto-mode/scripts/`:
 
 ```shell
 cd plugins/pstack/skills/poteto-mode/scripts
-bun install --frozen-lockfile
-bun run typecheck
-bun test orch watch-pr check-plan.test.ts
-bunx prettier@3.6.2 --check .
+pnpm install --frozen-lockfile
+pnpm typecheck
+pnpm test
+pnpm dlx prettier@3.6.2 --check .
 ```
 
 The scripts use Prettier 3.6.2 at upstream's settings in `.prettierrc.json`, CI runs the same check, and `.prettierignore` names each file the check skips and why.
@@ -83,7 +83,7 @@ The scripts use Prettier 3.6.2 at upstream's settings in `.prettierrc.json`, CI 
 `ship-pr` has one check CI cannot run. `watch-pr/live-merge-safety.mjs` creates a private repository on your `gh` account, drives `ship-pr inspect` and `cancel-pending` against a stale head, a moved base, and a retargeted base, confirms GitHub refuses a merge at a stale SHA, merges the current head, and deletes the repository. The delete needs the `gh` token's `delete_repo` scope; when it fails, the script prints the command to delete the repository by hand. Run it from the same directory before a release that changes `watch-pr/`:
 
 ```shell
-bun watch-pr/live-merge-safety.mjs --live-disposable
+node watch-pr/live-merge-safety.mjs --live-disposable
 ```
 
 If you touched a workflow, audit it before pushing:

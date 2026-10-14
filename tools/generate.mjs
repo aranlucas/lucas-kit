@@ -1,7 +1,7 @@
-#!/usr/bin/env bun
+#!/usr/bin/env node
 // Stamps facts that live in one source file into every file that carries a
 // copy, and validates cross-file contracts. Idempotent; run it after editing
-// a source of truth. CI contract: `bun tools/generate.mjs --check` writes
+// a source of truth. CI contract: `node tools/generate.mjs --check` writes
 // nothing and fails when a committed copy is stale, so it cannot ship.
 //
 // Sources of truth:
@@ -58,6 +58,7 @@ import {
 import { basename, dirname, join, relative } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
+import { parse as parseYaml } from "yaml";
 import { Type } from "typebox";
 import { Value } from "typebox/value";
 
@@ -157,7 +158,7 @@ export function assertChangesHeading(changelog, version) {
 export function parseFrontmatter(text) {
   const block = text.match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
   if (!block) return { data: null, body: text };
-  return { data: Bun.YAML.parse(block[1]) ?? {}, body: text.slice(block[0].length) };
+  return { data: parseYaml(block[1]) ?? {}, body: text.slice(block[0].length) };
 }
 
 // Validate the shared subset of the Agent Skills contract before deriving any
@@ -1100,7 +1101,7 @@ export function problems(root, models) {
 
 function main() {
   const args = process.argv.slice(2);
-  if (args.some((arg) => arg !== "--check")) throw new Error("usage: bun tools/generate.mjs [--check]");
+  if (args.some((arg) => arg !== "--check")) throw new Error("usage: node tools/generate.mjs [--check]");
   const check = args.includes("--check");
   const models = loadModels(repo);
   const intended = plan(repo, models);
@@ -1114,7 +1115,7 @@ function main() {
   failures.push(...problems(repo, models));
   if (check && pending?.length) {
     failures.push(
-      "generated output is stale; run bun tools/generate.mjs:\n" +
+      "generated output is stale; run node tools/generate.mjs:\n" +
         pending.map(({ kind, path }) => `  ${kind}: ${path}`).join("\n"),
     );
   }

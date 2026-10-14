@@ -1,8 +1,9 @@
 // The agent registry across a session's life: restore from persisted entries,
 // shutdown, an abrupt parent exit, and the settle hold of a non-interactive run.
-import { describe, expect, spyOn, test } from "bun:test";
-import * as childProcess from "node:child_process";
-import * as fs from "node:fs";
+import { describe, expect, vi, test } from "vitest";
+import childProcess from "node:child_process";
+import fs from "node:fs";
+import { syncBuiltinESMExports } from "node:module";
 import { join } from "node:path";
 
 import { agentEntry, alive, flag, listAgents, recordWith, restore, sleep, useWorld, waitFor } from "./harness.mjs";
@@ -93,7 +94,7 @@ describe("registry", () => {
   // the entries a pi process opening the same session would read.
   async function otherPi(options = {}) {
     const { w, ctx } = setup({ script: { default: [{ spawn: "running" }, { sleep: 30000 }] }, ...options });
-    const host = w.spawn(process.execPath, [join(import.meta.dir, "host.mjs"), JSON.stringify(w.settings), "stay"], {
+    const host = w.spawn(process.execPath, ["--experimental-transform-types", join(import.meta.dirname, "host.mjs"), JSON.stringify(w.settings), "stay"], {
       stdio: ["ignore", "pipe", "inherit"],
     });
     let printed = "";
@@ -164,7 +165,7 @@ describe("registry", () => {
       again: [{ reply: "resumed" }],
     } } });
     const [first] = w.invocations();
-    expect(entries[0].data.pidStart).toBeString();
+    expect(entries[0].data.pidStart).toBeTypeOf("string");
     const id = entries[0].data.agent.id;
     const exited = exitOf(host);
     host.kill("SIGKILL");
@@ -178,13 +179,14 @@ describe("registry", () => {
     // Fail both process-inspection APIs while leaving the real child running.
     const readFile = fs.readFileSync;
     const spawn = childProcess.spawnSync;
-    const proc = spyOn(fs, "readFileSync").mockImplementation((path, ...args) => {
+    const proc = vi.spyOn(fs, "readFileSync").mockImplementation((path, ...args) => {
       if (path === `/proc/${first.pid}/stat`) throw Object.assign(new Error("inspection unavailable"), { code: "EACCES" });
       return readFile(path, ...args);
     });
-    const ps = spyOn(childProcess, "spawnSync").mockImplementation((command, args, ...options) =>
+    const ps = vi.spyOn(childProcess, "spawnSync").mockImplementation((command, args, ...options) =>
       command === "ps" && args.includes(String(first.pid)) ? { status: 1, stdout: "" } : spawn(command, args, ...options),
     );
+    syncBuiltinESMExports();
     try {
       if (failure === "restore") resumed = await restore(w, entries);
       else await sleep(2 * w.settings.killGraceMs);
@@ -194,6 +196,7 @@ describe("registry", () => {
     } finally {
       proc.mockRestore();
       ps.mockRestore();
+      syncBuiltinESMExports();
     }
 
     expect((await listAgents(resumed, ctx))[0].status).toBe("running");
@@ -305,7 +308,7 @@ describe("registry", () => {
   for (const how of ["exit", "SIGINT"]) {
     test(`a print-mode parent that ends by ${how} takes its running agents with it`, async () => {
       const { w } = setup({ script: { default: [{ spawn: "running" }, { sleep: 30000 }] } });
-      const host = w.spawn(process.execPath, [join(import.meta.dir, "host.mjs"), JSON.stringify(w.settings), how], {
+      const host = w.spawn(process.execPath, ["--experimental-transform-types", join(import.meta.dirname, "host.mjs"), JSON.stringify(w.settings), how], {
         stdio: ["ignore", "pipe", "inherit"],
       });
       const exited = exitOf(host);

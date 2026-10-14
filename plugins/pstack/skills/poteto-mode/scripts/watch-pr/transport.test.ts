@@ -1,4 +1,4 @@
-import { afterEach, expect, it } from "bun:test";
+import { afterEach, expect, it } from "vitest";
 import { spawnSync } from "node:child_process";
 import {
   chmodSync,
@@ -74,7 +74,7 @@ console.log(JSON.stringify(value));
   const entry = join(dir, "entry.ts");
   writeFileSync(
     entry,
-    `import { main } from ${JSON.stringify(join(import.meta.dir, "cli.ts"))}; process.exitCode = await main(process.argv.slice(2));\n`
+    `import { main } from ${JSON.stringify(join(import.meta.dirname, "cli.ts"))}; process.exitCode = await main(process.argv.slice(2));\n`
   );
   const callsFile = join(dir, "calls.jsonl");
   writeFileSync(callsFile, "");

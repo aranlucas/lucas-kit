@@ -1,6 +1,6 @@
 // settleWorktree against real git state: it must never drop a commit the agent
 // made. Then the agent tool's worktree isolation over it.
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "vitest";
 import { spawnSync } from "node:child_process";
 import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";

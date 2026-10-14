@@ -1,4 +1,4 @@
-import { expect, it } from "bun:test";
+import { expect, it } from "vitest";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -7,7 +7,7 @@ for (const name of ["watch-pr", "ship-pr"]) {
   it(`${name} --help runs from a foreign working directory`, () => {
     const result = spawnSync(
       process.execPath,
-      ["run", join(import.meta.dir, name), "--help"],
+      [join(import.meta.dirname, name), "--help"],
       {
         cwd: tmpdir(),
         encoding: "utf8",

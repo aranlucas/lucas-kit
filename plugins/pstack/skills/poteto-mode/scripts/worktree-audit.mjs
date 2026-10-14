@@ -99,8 +99,8 @@ const fileId = (path, stat) => {
 // A link is known by the identity stat reports for what it lands on, and by
 // the name realpathSync gives it when it gives one. The name alone misses
 // links: node resolves `..` in a target before the links in it and keeps a
-// firmlink route as written, and bun opens the target to name it, which macOS
-// refuses for its autofs /home. A dangling or looping link (ENOENT, ELOOP)
+// firmlink route as written. Resolving a name can also fail on protected paths
+// such as macOS's autofs /home. A dangling or looping link (ENOENT, ELOOP)
 // spells nothing. When stat fails any other way the route is closed to this
 // process and the link could land anywhere, so the error propagates and the
 // caller leaves the worktree's chat fact unknown.

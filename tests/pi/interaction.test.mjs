@@ -1,5 +1,5 @@
 // ask_user_question, schedule_wakeup, and /loop through the fake ExtensionAPI.
-import { afterEach, beforeEach, describe, expect, jest, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, vi, test } from "vitest";
 
 import { DONE, OTHER } from "../../plugins/pstack/pi/ask.ts";
 import { resultText, useWorld } from "./harness.mjs";
@@ -159,8 +159,8 @@ describe("ask_user_question", () => {
 });
 
 describe("schedule_wakeup", () => {
-  beforeEach(() => jest.useFakeTimers());
-  afterEach(() => jest.useRealTimers());
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
 
   const wake = (pi, ctx, params) => pi.call("schedule_wakeup", { reason: "waiting on CI", ...params }, ctx);
 
@@ -168,12 +168,12 @@ describe("schedule_wakeup", () => {
     let idle = false;
     const { pi, ctx } = setup({ ctx: { idle: () => idle } });
     await wake(pi, ctx, { delaySeconds: 60, prompt: "resume after compaction" });
-    jest.advanceTimersByTime(65_000);
+    vi.advanceTimersByTime(65_000);
     expect(pi.userMessages).toEqual([]);
     idle = true;
-    jest.advanceTimersByTime(1_000);
+    vi.advanceTimersByTime(1_000);
     expect(pi.userMessages.map((m) => m.content)).toEqual(["resume after compaction"]);
-    jest.advanceTimersByTime(60_000);
+    vi.advanceTimersByTime(60_000);
     expect(pi.userMessages).toHaveLength(1);
   });
 
@@ -181,12 +181,12 @@ describe("schedule_wakeup", () => {
     let idle = false;
     const { pi, ctx } = setup({ ctx: { idle: () => idle } });
     await wake(pi, ctx, { delaySeconds: 60, prompt: "old" });
-    jest.advanceTimersByTime(60_000);
+    vi.advanceTimersByTime(60_000);
     if (action === "cancel") expect((await wake(pi, ctx, { stop: true })).details.cancelled).toBe(true);
     if (action === "replace") await wake(pi, ctx, { delaySeconds: 60, prompt: "new" });
     if (action === "shutdown") await pi.emit("session_shutdown", { reason: "quit" }, ctx);
     idle = true;
-    jest.advanceTimersByTime(120_000);
+    vi.advanceTimersByTime(120_000);
     expect(pi.userMessages.map((m) => m.content)).toEqual(action === "replace" ? ["new"] : []);
   });
 
@@ -194,9 +194,9 @@ describe("schedule_wakeup", () => {
     const { pi, ctx } = setup({ ctx: { idle: true } });
     const result = await wake(pi, ctx, { delaySeconds: 5, prompt: "check CI" });
     expect(result.details.delaySeconds).toBe(60);
-    jest.advanceTimersByTime(59_000);
+    vi.advanceTimersByTime(59_000);
     expect(pi.userMessages).toEqual([]);
-    jest.advanceTimersByTime(1_000);
+    vi.advanceTimersByTime(1_000);
     expect(pi.userMessages).toEqual([{ content: "check CI", options: { deliverAs: "followUp", expandPromptTemplates: true } }]);
   });
 
@@ -205,7 +205,7 @@ describe("schedule_wakeup", () => {
       const { pi, ctx } = setup({ ctx: { mode } });
       const err = await wake(pi, ctx, { delaySeconds: 60, prompt: "later" }).catch((e) => e);
       expect(err.message).toContain("exits when this run ends");
-      jest.advanceTimersByTime(3_600_000);
+      vi.advanceTimersByTime(3_600_000);
       expect(pi.userMessages).toEqual([]);
     });
   }
@@ -214,12 +214,12 @@ describe("schedule_wakeup", () => {
     let idle = false;
     const { pi, ctx } = setup({ ctx: { idle: () => idle } });
     expect((await wake(pi, ctx, { delaySeconds: 99999, prompt: "later" })).details.delaySeconds).toBe(3600);
-    jest.advanceTimersByTime(3_599_000);
+    vi.advanceTimersByTime(3_599_000);
     expect(pi.userMessages).toEqual([]);
-    jest.advanceTimersByTime(1_000);
+    vi.advanceTimersByTime(1_000);
     expect(pi.userMessages).toEqual([]);
     idle = true;
-    jest.advanceTimersByTime(1_000);
+    vi.advanceTimersByTime(1_000);
     expect(pi.userMessages).toEqual([{ content: "later", options: { deliverAs: "followUp", expandPromptTemplates: true } }]);
   });
 
@@ -227,7 +227,7 @@ describe("schedule_wakeup", () => {
     const { pi, ctx } = setup();
     await wake(pi, ctx, { delaySeconds: 600, prompt: "first" });
     await wake(pi, ctx, { delaySeconds: 120, prompt: "second" });
-    jest.advanceTimersByTime(3_600_000);
+    vi.advanceTimersByTime(3_600_000);
     expect(pi.userMessages.map((m) => m.content)).toEqual(["second"]);
   });
 
@@ -236,9 +236,9 @@ describe("schedule_wakeup", () => {
     await wake(pi, ctx, { delaySeconds: 120, prompt: "replaced" });
     const result = await wake(pi, ctx, { delaySeconds: 60, prompt: "routine check", noop: true });
     expect(result.details).toMatchObject({ delaySeconds: 60, noop: true });
-    jest.advanceTimersByTime(60_000);
+    vi.advanceTimersByTime(60_000);
     expect(pi.userMessages.map((m) => m.content)).toEqual(["routine check"]);
-    jest.advanceTimersByTime(3_600_000);
+    vi.advanceTimersByTime(3_600_000);
     expect(pi.userMessages.map((m) => m.content)).toEqual(["routine check"]);
   });
 
@@ -247,7 +247,7 @@ describe("schedule_wakeup", () => {
     expect(pi.tools.get("schedule_wakeup").parameters.required ?? []).toEqual([]);
     await wake(pi, ctx, { delaySeconds: 120, prompt: "cancelled" });
     expect((await pi.call("schedule_wakeup", { stop: true }, ctx)).details.cancelled).toBe(true);
-    jest.advanceTimersByTime(3_600_000);
+    vi.advanceTimersByTime(3_600_000);
     expect(pi.userMessages).toEqual([]);
     expect((await pi.call("schedule_wakeup", { stop: true }, ctx)).details.cancelled).toBe(false);
   });
@@ -256,7 +256,7 @@ describe("schedule_wakeup", () => {
     const { pi, ctx } = setup();
     const err = await pi.call("schedule_wakeup", { reason: "r" }, ctx).catch((e) => e);
     expect(err.message).toContain("needs delaySeconds and prompt");
-    jest.advanceTimersByTime(3_600_000);
+    vi.advanceTimersByTime(3_600_000);
     expect(pi.userMessages).toEqual([]);
   });
 
@@ -266,14 +266,14 @@ describe("schedule_wakeup", () => {
     await wake(pi, ctx, { delaySeconds: 120, prompt: "wake" });
     await pi.commands.get("loop").handler("1m tick", { ...ctx, ui });
     await pi.emit("session_shutdown", { reason: "quit" }, ctx);
-    jest.advanceTimersByTime(3_600_000);
+    vi.advanceTimersByTime(3_600_000);
     expect(pi.userMessages.map((m) => m.content)).toEqual(["tick"]);
   });
 });
 
 describe("/loop", () => {
-  beforeEach(() => jest.useFakeTimers());
-  afterEach(() => jest.useRealTimers());
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
 
   function loop(ctxOpts = {}) {
     const ui = scriptedUi([]);
@@ -285,19 +285,19 @@ describe("/loop", () => {
     const { pi, run } = loop();
     await run("5m check the deploy");
     expect(pi.userMessages.map((m) => m.content)).toEqual(["check the deploy"]);
-    jest.advanceTimersByTime(10 * 60_000);
+    vi.advanceTimersByTime(10 * 60_000);
     expect(pi.userMessages).toHaveLength(3);
     await run("stop");
-    jest.advanceTimersByTime(60 * 60_000);
+    vi.advanceTimersByTime(60 * 60_000);
     expect(pi.userMessages).toHaveLength(3);
   });
 
   test("an interval under a minute is raised to one minute", async () => {
     const { pi, run, ui } = loop();
     await run("10s poll");
-    jest.advanceTimersByTime(59_000);
+    vi.advanceTimersByTime(59_000);
     expect(pi.userMessages).toHaveLength(1);
-    jest.advanceTimersByTime(1_000);
+    vi.advanceTimersByTime(1_000);
     expect(pi.userMessages).toHaveLength(2);
     expect(ui.calls.at(-1).message).toContain("60s");
   });
@@ -307,10 +307,10 @@ describe("/loop", () => {
     const { pi, run } = loop({ idle: () => idle });
     await run("1m tick");
     idle = false;
-    jest.advanceTimersByTime(10 * 60_000);
+    vi.advanceTimersByTime(10 * 60_000);
     expect(pi.userMessages).toHaveLength(1);
     idle = true;
-    jest.advanceTimersByTime(60_000);
+    vi.advanceTimersByTime(60_000);
     expect(pi.userMessages).toHaveLength(2);
   });
 
@@ -318,7 +318,7 @@ describe("/loop", () => {
     const { pi, run, ui } = loop();
     await run("5m");
     await run("25d x");
-    jest.advanceTimersByTime(60 * 60_000);
+    vi.advanceTimersByTime(60 * 60_000);
     expect(pi.userMessages).toEqual([]);
     expect(ui.calls.map((c) => c.message)).toEqual([expect.stringContaining("Usage"), expect.stringContaining("24 days")]);
   });
@@ -330,7 +330,7 @@ describe("/loop", () => {
     const text = pi.userMessages[0].content;
     expect(text.startsWith("watch PR 42\n")).toBe(true);
     expect(text).toContain('schedule_wakeup with prompt "/loop watch PR 42"');
-    jest.advanceTimersByTime(24 * 3_600_000);
+    vi.advanceTimersByTime(24 * 3_600_000);
     expect(pi.userMessages).toHaveLength(1);
   });
 
@@ -339,11 +339,11 @@ describe("/loop", () => {
     await run("watch old PR");
     await pi.call("schedule_wakeup", { delaySeconds: 60, prompt: "/loop watch old PR" }, ctx);
     await run("watch new PR");
-    jest.advanceTimersByTime(60_000);
+    vi.advanceTimersByTime(60_000);
     expect(pi.userMessages.map((m) => m.content)).toEqual([expect.stringContaining("watch old PR\n"), expect.stringContaining("watch new PR\n")]);
 
     await pi.call("schedule_wakeup", { delaySeconds: 120, prompt: "/loop watch new PR" }, ctx);
-    jest.advanceTimersByTime(120_000);
+    vi.advanceTimersByTime(120_000);
     expect(pi.userMessages.map((m) => m.content)).toEqual([
       expect.stringContaining("watch old PR\n"),
       expect.stringContaining("watch new PR\n"),
@@ -365,7 +365,7 @@ describe("/loop", () => {
       expect(refused.details).toEqual({ refused: true });
       expect(ui.calls.at(-1).message).toContain("was not scheduled");
       idle = true;
-      jest.advanceTimersByTime(3_600_000);
+      vi.advanceTimersByTime(3_600_000);
       expect(pi.userMessages).toHaveLength(1);
     });
   }
@@ -381,7 +381,7 @@ describe("/loop", () => {
     await pi.emit("agent_settled", {}, ctx);
     idle = true;
     expect(resultText(await wake())).toContain("Wakeup scheduled");
-    jest.advanceTimersByTime(60_000);
+    vi.advanceTimersByTime(60_000);
     expect(pi.userMessages.map((m) => m.content)).toEqual(["later"]);
   });
 
@@ -396,15 +396,15 @@ describe("/loop", () => {
     expect(ui.calls.at(-1).message).toBe("The loop starts once the session is idle.");
     expect((await wake({ delaySeconds: 60, prompt: "/loop watch old" })).details).toEqual({ refused: true });
     expect((await wake({ stop: true })).details).toEqual({ cancelled: false });
-    jest.advanceTimersByTime(60_000);
+    vi.advanceTimersByTime(60_000);
     expect(pi.userMessages).toHaveLength(1);
 
     await pi.emit("agent_settled", {}, ctx);
     idle = true;
-    jest.advanceTimersByTime(1_000);
+    vi.advanceTimersByTime(1_000);
     expect(pi.userMessages).toHaveLength(2);
     expect(resultText(await wake({ delaySeconds: 120, prompt: "/loop watch new" }))).toContain("Wakeup scheduled");
-    jest.advanceTimersByTime(120_000);
+    vi.advanceTimersByTime(120_000);
     expect(pi.userMessages.map((m) => m.content)).toEqual([
       expect.stringContaining("watch old\n"),
       expect.stringContaining("watch new\n"),
@@ -417,11 +417,11 @@ describe("/loop", () => {
     const { pi, ctx, run } = loop({ idle: () => idle });
     await pi.emit("agent_start", {}, ctx);
     await run("5m check the deploy");
-    jest.advanceTimersByTime(30_000);
+    vi.advanceTimersByTime(30_000);
     expect(pi.userMessages).toEqual([]);
     await pi.emit("agent_settled", {}, ctx);
     idle = true;
-    jest.advanceTimersByTime(1_000);
+    vi.advanceTimersByTime(1_000);
     expect(pi.userMessages.map((m) => m.content)).toEqual(["check the deploy"]);
   });
 
@@ -433,7 +433,7 @@ describe("/loop", () => {
     await run("watch the deploy");
     expect(ui.calls.at(-1).message).toBe("The loop starts once the session is idle.");
     idle = true;
-    jest.advanceTimersByTime(1_000);
+    vi.advanceTimersByTime(1_000);
     expect(pi.userMessages).toHaveLength(1);
     idle = false;
     await pi.emit("agent_start", {}, ctx);
@@ -458,7 +458,7 @@ describe("/loop", () => {
       const { pi, ctx, run } = loop();
       if (started) await run(started);
       expect(resultText(await pi.call("schedule_wakeup", { delaySeconds: 60, prompt }, ctx))).toContain("Wakeup scheduled");
-      jest.advanceTimersByTime(60_000);
+      vi.advanceTimersByTime(60_000);
       expect(pi.userMessages.at(-1).content).toBe(prompt);
     });
   }
@@ -467,7 +467,7 @@ describe("/loop", () => {
     const { pi, run } = loop();
     await run("1m old task");
     await run("new task");
-    jest.advanceTimersByTime(120_000);
+    vi.advanceTimersByTime(120_000);
     expect(pi.userMessages.map((m) => m.content)).toEqual(["old task", expect.stringContaining("new task\n")]);
   });
 
@@ -477,7 +477,7 @@ describe("/loop", () => {
     await pi.call("schedule_wakeup", { delaySeconds: 60, prompt: "/loop watch old PR" }, ctx);
     await run("1m old task");
     await run("2m new task");
-    jest.advanceTimersByTime(120_000);
+    vi.advanceTimersByTime(120_000);
     expect(pi.userMessages.map((m) => m.content)).toEqual([expect.stringContaining("watch old PR\n"), "old task", "new task", "new task"]);
   });
 
@@ -493,7 +493,7 @@ describe("/loop", () => {
       const done = run("tick").then(() => (returned = true));
       await drain();
       expect(pi.userMessages).toHaveLength(1);
-      jest.advanceTimersByTime(60_000);
+      vi.advanceTimersByTime(60_000);
       await drain();
       expect(returned).toBe(false);
       await pi.emit("agent_settled", {}, ctx);
@@ -554,7 +554,7 @@ describe("/loop", () => {
     await pi.call("schedule_wakeup", { delaySeconds: 120, prompt: "/loop watch", reason: "r" }, ctx);
     await run("stop");
     expect(ui.calls.at(-1).message).toBe("Loop stopped.");
-    jest.advanceTimersByTime(3_600_000);
+    vi.advanceTimersByTime(3_600_000);
     expect(pi.userMessages).toHaveLength(1);
   });
 });

@@ -1,6 +1,6 @@
 // PiChild against small scripted children, for stream edge cases the fake pi
 // cannot produce.
-import { expect, test } from "bun:test";
+import { expect, test } from "vitest";
 
 import { PiChild } from "../../plugins/pstack/pi/child.ts";
 import { sleep } from "./harness.mjs";

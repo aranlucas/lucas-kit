@@ -1,7 +1,7 @@
-#!/usr/bin/env bun
+#!/usr/bin/env node
 // Sync this port forward to a new upstream SHA.
 //
-//   bun tools/sync.mjs <component> <new-sha> [--dry-run]
+//   node tools/sync.mjs <component> <new-sha> [--dry-run]
 //
 // Reads tools/upstream.json (remote, per-component pin, and the `exclude`
 // list of upstream paths the port deliberately does not carry) and
@@ -511,7 +511,7 @@ function main() {
   const spec = upstream.components[component];
   if (stray.length || !spec || !newSha?.match(/^[0-9a-f]{7,40}$/)) {
     for (const arg of stray) console.error(`unexpected argument: ${JSON.stringify(arg)}`);
-    console.error(`usage: bun tools/sync.mjs <${Object.keys(upstream.components).join("|")}> <new-sha> [--dry-run]`);
+    console.error(`usage: node tools/sync.mjs <${Object.keys(upstream.components).join("|")}> <new-sha> [--dry-run]`);
     process.exit(2);
   }
   const { substitutions, denylist } = parseSubstitutions(
@@ -617,7 +617,7 @@ function main() {
     for (const c of report.conflicts) {
       if (c.reason === "removed-upstream") console.log(`  now port-only: ${spec.localPath}/${c.rel}`);
     }
-    console.log("next: resolve the conflict markers, review the diff, write the CHANGES.md entry from this report (name each now port-only file), run bun tools/generate.mjs (it fails while a marker remains)");
+    console.log("next: resolve the conflict markers, review the diff, write the CHANGES.md entry from this report (name each now port-only file), run node tools/generate.mjs (it fails while a marker remains)");
   } finally {
     rmSync(scratch, { recursive: true, force: true });
   }

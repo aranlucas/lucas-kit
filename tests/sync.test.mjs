@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, describe, expect, test } from "vitest";
 import { execFileSync, spawnSync } from "node:child_process";
 import {
   chmodSync,
@@ -30,7 +30,7 @@ import {
   syncComponent,
 } from "../tools/sync.mjs";
 
-const RULES = parseSubstitutions(JSON.parse(readFileSync(join(import.meta.dir, "../tools/substitutions.json"), "utf8")));
+const RULES = parseSubstitutions(JSON.parse(readFileSync(join(import.meta.dirname, "../tools/substitutions.json"), "utf8")));
 
 const fixtures = [];
 afterEach(() => {
@@ -418,13 +418,13 @@ describe("mergeFile", () => {
   });
 
   test.each([
-    ["the repository", join(import.meta.dir, "..")],
+    ["the repository", join(import.meta.dirname, "..")],
     ["outside any repository", tmpdir()],
   ])("a conflict carries git's merge-style markers whatever the user's merge.conflictStyle, run from %s", (_, cwd) => {
     const home = tree({ gitconfig: "[merge]\n\tconflictStyle = zdiff3\n" });
     const sides = [base.replace("l3", "ours"), base, base.replace("l3", "theirs")].map((text) => `Buffer.from(${JSON.stringify(text)})`);
     const script = [
-      `import { mergeFile } from ${JSON.stringify(join(import.meta.dir, "../tools/sync.mjs"))};`,
+      `import { mergeFile } from ${JSON.stringify(join(import.meta.dirname, "../tools/sync.mjs"))};`,
       `process.stdout.write(mergeFile(${sides.join(", ")}).buffer);`,
     ].join("\n");
 
@@ -533,7 +533,7 @@ describe("classify", () => {
 
 describe("syncComponent", () => {
   test("installed plugin text is free of the denylist", () => {
-    const plugin = join(import.meta.dir, "../plugins/pstack");
+    const plugin = join(import.meta.dirname, "../plugins/pstack");
     const report = sync({ oldDir: plugin, newDir: plugin, localDir: plugin, dryRun: true });
     expect(report.hits).toEqual([]);
   });
@@ -799,7 +799,7 @@ describe("syncComponent", () => {
 
     expect(report.conflicts).toEqual([{ rel: "s.md", reason: "conflict", hunks: 1 }]);
     expect(report.hits).toHaveLength(1);
-    expect(report.hits[0]).toStartWith("s.md:4:");
+    expect(report.hits[0].startsWith("s.md:4:")).toBe(true);
     expect(readFileSync(join(local, "s.md"), "utf8")).toBe("manual correction\n");
   });
 
@@ -1247,7 +1247,7 @@ describe("syncComponent", () => {
 
     expect(report.forked).toEqual([{ rel: "s.md", changed: 1 }]);
     expect(report.hits).toHaveLength(1);
-    expect(report.hits[0]).toStartWith("s.md:2:");
+    expect(report.hits[0].startsWith("s.md:2:")).toBe(true);
   });
 
   test("non-overlapping port and upstream edits merge into one written file", () => {
@@ -1481,7 +1481,7 @@ describe("syncComponent", () => {
     chmodSync(join(bin, "git"), 0o755);
     const [oldDir, newDir, localDir] = [tree({ "s.md": "old\n" }), tree({ "s.md": "new\n" }), tree({ "s.md": "port\n" })];
     const script = [
-      `import { syncComponent } from ${JSON.stringify(join(import.meta.dir, "../tools/sync.mjs"))};`,
+      `import { syncComponent } from ${JSON.stringify(join(import.meta.dirname, "../tools/sync.mjs"))};`,
       `syncComponent(${JSON.stringify({ oldDir, newDir, localDir, rules: [] })});`,
     ].join("\n");
 
@@ -1518,13 +1518,13 @@ describe("sync CLI", () => {
 
     const port = join(root, "port");
     for (const file of ["sync.mjs", "generate.mjs", "plugin.mjs", "runtimes.mjs", "validate-skills.mjs", "substitutions.json"]) {
-      cpSync(join(import.meta.dir, "../tools", file), join(port, "tools", file));
+      cpSync(join(import.meta.dirname, "../tools", file), join(port, "tools", file));
     }
-    symlinkSync(join(import.meta.dir, "../node_modules"), join(port, "node_modules"));
-    cpSync(join(import.meta.dir, "../plugins/pstack/models.json"), join(port, "plugins/pstack/models.json"));
+    symlinkSync(join(import.meta.dirname, "../node_modules"), join(port, "node_modules"));
+    cpSync(join(import.meta.dirname, "../plugins/pstack/models.json"), join(port, "plugins/pstack/models.json"));
     mkdirSync(join(port, "plugins/pstack/skills"));
     mkdirSync(join(port, "plugins/pstack/skills/setup-pstack/scripts"), { recursive: true });
-    cpSync(join(import.meta.dir, "../plugins/pstack/skills/setup-pstack/scripts/t3-sheet.mjs"), join(port, "plugins/pstack/skills/setup-pstack/scripts/t3-sheet.mjs"));
+    cpSync(join(import.meta.dirname, "../plugins/pstack/skills/setup-pstack/scripts/t3-sheet.mjs"), join(port, "plugins/pstack/skills/setup-pstack/scripts/t3-sheet.mjs"));
     writeFileSync(join(port, "plugins/pstack/skills/s.md"), localText);
     for (const runtime of RUNTIMES) {
       mkdirSync(join(port, runtime.tools, ".."), { recursive: true });
@@ -1592,7 +1592,7 @@ describe("sync CLI", () => {
 
   test("a dry run prints each fork's changed lines with a total, then the port-only files", () => {
     const { run } = cli({ oldText: "one\n", newText: "one\n", localText: "one\nport\n", forks: declareS("policy") });
-    const models = JSON.parse(readFileSync(join(import.meta.dir, "../plugins/pstack/models.json"), "utf8"));
+    const models = JSON.parse(readFileSync(join(import.meta.dirname, "../plugins/pstack/models.json"), "utf8"));
     const roleSkills = [...new Set(models.roles.map((r) => r.skill))];
 
     const result = run("--dry-run");
@@ -1656,7 +1656,7 @@ describe("sync CLI", () => {
 
   test("a stray argument fails naming it above the usage line, and nothing is written or pinned", () => {
     const { run, pin, local, oldSha } = cli({ oldText: "one\n", newText: "two\n", localText: "one\n" });
-    const usage = "usage: bun tools/sync.mjs <kit> <new-sha> [--dry-run]\n";
+    const usage = "usage: node tools/sync.mjs <kit> <new-sha> [--dry-run]\n";
 
     for (const [flags, named] of [
       [["--dry"], 'unexpected argument: "--dry"\n'],

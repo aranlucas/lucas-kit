@@ -1,4 +1,4 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it } from "vitest";
 import { main } from "./cli.ts";
 import { WatchDeadline } from "./deadline.ts";
 import { fakeReader, type FakeReaderOptions } from "./fakes.test-helper.ts";

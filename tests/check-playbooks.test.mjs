@@ -1,13 +1,13 @@
-import { describe, expect, setDefaultTimeout, test } from "bun:test";
+import { describe, expect, vi, test } from "vitest";
 import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { checkPlaybooks } from "../plugins/pstack/skills/poteto-mode/scripts/check-playbooks.mjs";
 
-setDefaultTimeout(30_000);
+vi.setConfig({ testTimeout: 30_000 });
 
-const script = join(import.meta.dir, "../plugins/pstack/skills/poteto-mode/scripts/check-playbooks.mjs");
+const script = join(import.meta.dirname, "../plugins/pstack/skills/poteto-mode/scripts/check-playbooks.mjs");
 
 function run(playbooks, { throughSymlink = false, cwd = ".", args = ["."] } = {}) {
   // The script reports the resolved working directory; macOS tmpdir() sits behind the /var symlink.

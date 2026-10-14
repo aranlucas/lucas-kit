@@ -1,6 +1,7 @@
+import { parse as parseYaml } from "yaml";
 // Unit tests for the generator: the region model that stamps model policy into
 // skills, the version stamp, the validators, and the plan it writes from.
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "vitest";
 import { spawnSync } from "node:child_process";
 import {
   cpSync,
@@ -343,7 +344,7 @@ describe("slashCommands", () => {
     for (const menu of samples) {
       let parsed;
       try {
-        parsed = Bun.YAML.parse(promptStub({ name: "b", menu }, RUNTIMES[0]).split("---\n")[1]).description;
+        parsed = parseYaml(promptStub({ name: "b", menu }, RUNTIMES[0]).split("---\n")[1]).description;
       } catch {}
       let accepted = true;
       try {
@@ -645,7 +646,7 @@ describe("plan, changes, apply", () => {
     const stale = run("--check");
     expect(stale.status).toBe(1);
     expect(stale.stderr).toContain(
-      `FAIL: generated output is stale; run bun tools/generate.mjs:\n  write: ${STUB}\n  remove: ${STRAY}\n`,
+      `FAIL: generated output is stale; run node tools/generate.mjs:\n  write: ${STUB}\n  remove: ${STRAY}\n`,
     );
     expect(snapshot(root)).toEqual(before);
     expect(run().status).toBe(0);

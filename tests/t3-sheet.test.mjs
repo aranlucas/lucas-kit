@@ -2,7 +2,7 @@
 // catalog. The fixture is a trimmed copy of a real catalog: Claude names its
 // reasoning option `effort`, Codex and Grok name it `reasoningEffort`, and an
 // unauthenticated provider lists models it cannot run.
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "vitest";
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";

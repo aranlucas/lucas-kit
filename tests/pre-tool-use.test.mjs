@@ -2,7 +2,7 @@
 // `view` of the plugin's own files and strict vendored-script runs, denies
 // pstack agents on models a valid sheet does not name, and stays silent for
 // everything else.
-import { afterAll, describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, test } from "vitest";
 import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";

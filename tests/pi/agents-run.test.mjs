@@ -1,6 +1,6 @@
 // One agent run through the fake ExtensionAPI, with the fake pi as the child:
 // its lifecycle, how its end is classified, its output, and stopping it.
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "vitest";
 import { readFileSync, rmSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 

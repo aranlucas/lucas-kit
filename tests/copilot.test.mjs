@@ -1,7 +1,7 @@
 // GitHub Copilot build contracts: the mapping names every Claude-specific term
 // the skills use, every skill with a Codex preamble also has the Copilot one,
 // and Copilot setup writes every role in models.json exactly once.
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";

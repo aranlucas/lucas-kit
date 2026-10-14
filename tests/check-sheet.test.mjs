@@ -1,7 +1,7 @@
 // setup-pstack's check-sheet.sh, run for real. It shares sheet.awk with the
 // GitHub Copilot SessionStart hook, so a sheet it passes is one the hook adds
 // to the session context.
-import { afterAll, describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, test } from "vitest";
 import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";

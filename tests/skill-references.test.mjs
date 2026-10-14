@@ -2,7 +2,7 @@
 // **laziness-protocol** principle skill", "(**principle-x**)" in poteto-mode's
 // index, and "`/name`" slash forms. Nothing resolved them until now, so a
 // renamed directory left dangling references no tool could see.
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "vitest";
 import { readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";

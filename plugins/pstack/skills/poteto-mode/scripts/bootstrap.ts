@@ -1,17 +1,9 @@
+import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-// This tooling is bun-only (import.meta.dir, Bun.spawnSync, bun.lock). Fail with a
-// clear message instead of an opaque `import.meta.dir is undefined` crash under node.
-if (typeof Bun === "undefined") {
-  console.error(
-    "pstack poteto-mode tooling requires bun (https://bun.sh). Install bun, then re-run."
-  );
-  process.exit(1);
-}
-
-const scriptsDirectory = import.meta.dir;
+const scriptsDirectory = import.meta.dirname;
 const nodeModulesDirectory = join(scriptsDirectory, "node_modules");
 const commanderPackagePath = join(
   nodeModulesDirectory,
@@ -27,7 +19,7 @@ function currentInstallKey(): string {
   return createHash("sha256")
     .update(readFileSync(join(scriptsDirectory, "package.json")))
     .update("\0")
-    .update(readFileSync(join(scriptsDirectory, "bun.lock")))
+    .update(readFileSync(join(scriptsDirectory, "pnpm-lock.yaml")))
     .digest("hex");
 }
 
@@ -41,20 +33,31 @@ export function ensureDependenciesInstalled(): void {
     return;
   }
 
-  const result = Bun.spawnSync(
-    [process.execPath, "install", "--frozen-lockfile", "--production"],
-    { cwd: scriptsDirectory }
+  // Keep development tools when refreshing an existing development install.
+  const manifest = JSON.parse(
+    readFileSync(join(scriptsDirectory, "package.json"), "utf8")
+  ) as { devDependencies?: Record<string, string> };
+  const developmentInstall = Object.keys(manifest.devDependencies ?? {}).some(
+    (name) => existsSync(join(nodeModulesDirectory, name, "package.json"))
   );
-  if (result.exitCode !== 0) {
-    process.stdout.write(result.stdout);
-    process.stderr.write(result.stderr);
+  const installArgs = ["install", "--frozen-lockfile", ...(developmentInstall ? [] : ["--prod"])];
+  const result = spawnSync(
+    "pnpm",
+    installArgs,
+    { cwd: scriptsDirectory, encoding: "utf8" }
+  );
+  if (result.error || result.status !== 0) {
+    process.stdout.write(result.stdout ?? "");
+    process.stderr.write(result.stderr ?? "");
     throw new Error(
-      `bun install --frozen-lockfile exited with status ${result.exitCode}`
+      result.error
+        ? `Could not run pnpm. Install pnpm 12.11.0, then re-run: ${result.error.message}`
+        : `pnpm ${installArgs.join(" ")} exited with status ${result.status}`
     );
   }
   if (!existsSync(commanderPackagePath)) {
     throw new Error(
-      "bun install --frozen-lockfile completed without installing commander"
+      `pnpm ${installArgs.join(" ")} completed without installing commander`
     );
   }
 

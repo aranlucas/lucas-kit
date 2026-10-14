@@ -539,7 +539,10 @@ function graphqlArgs(
 }
 
 export class GhGitHubReader implements T.GitHubReader {
-  constructor(private readonly deadline: WatchDeadline) {}
+  private readonly deadline: WatchDeadline;
+  constructor(deadline: WatchDeadline) {
+    this.deadline = deadline;
+  }
   private run(argv: readonly [string, ...string[]]): Promise<CommandResult> {
     return run(argv, this.deadline);
   }

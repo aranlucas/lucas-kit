@@ -33,7 +33,7 @@ jobs:
       # exits 128 and fails the step.
       # pnpm 12 stores manager and project dependencies as separate YAML
       # documents. OSV 2.5.1 reads only the first, so expose each document as
-      # its own pnpm-lock.yaml to include the project's dependencies too.
+      # its own pnpm-lock.yaml for both root and vendored script dependencies.
       #
       # The v2.5.1 tag is mutable, so the digest is what actually pins this.
       # Resolved with: docker buildx imagetools inspect ghcr.io/google/osv-scanner:v2.5.1
@@ -45,12 +45,17 @@ jobs:
           from pathlib import Path
 
           target = Path(os.environ["RUNNER_TEMP"]) / "osv-pnpm"
-          for index, document in enumerate(re.split(r"(?m)^---\s*$", Path("pnpm-lock.yaml").read_text())):
-              if not document.strip():
-                  continue
-              folder = target / str(index)
-              folder.mkdir(parents=True, exist_ok=True)
-              (folder / "pnpm-lock.yaml").write_text(document)
+          lockfiles = [
+              Path("pnpm-lock.yaml"),
+              Path("plugins/pstack/skills/poteto-mode/scripts/pnpm-lock.yaml"),
+          ]
+          for lock_index, lockfile in enumerate(lockfiles):
+              for document_index, document in enumerate(re.split(r"(?m)^---\s*$", lockfile.read_text())):
+                  if not document.strip():
+                      continue
+                  folder = target / f"{lock_index}-{document_index}"
+                  folder.mkdir(parents=True, exist_ok=True)
+                  (folder / "pnpm-lock.yaml").write_text(document)
           PY
           docker run --rm -v "$GITHUB_WORKSPACE:/src:ro" \
             -v "$RUNNER_TEMP/osv-pnpm:/pnpm-lockfiles:ro" \

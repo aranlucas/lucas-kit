@@ -1,10 +1,10 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { findPiPackage, piDependency } from "../../tools/pi-package.mjs";
 
-const root = join(import.meta.dir, "../..");
+const root = join(import.meta.dirname, "../..");
 const piModels = JSON.parse(readFileSync(join(root, "plugins/pstack/models.json"), "utf8")).pi.models;
 
 function installedCatalog() {

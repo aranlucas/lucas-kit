@@ -1,7 +1,7 @@
 // A minimal stand-in for Pi's ExtensionAPI and ExtensionContext that records
 // what the extension registers and sends, plus per-test fixtures over the fake
 // pi. What only the real-pi suite needs is in live-harness.mjs.
-import { afterEach } from "bun:test";
+import { afterEach } from "vitest";
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";

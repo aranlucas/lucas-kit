@@ -1,5 +1,5 @@
 // The settings the extension derives from its flags, environment, and model sheet.
-import { expect, test } from "bun:test";
+import { expect, test } from "vitest";
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";

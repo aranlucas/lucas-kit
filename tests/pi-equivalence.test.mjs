@@ -1,8 +1,8 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "vitest";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
-const root = join(import.meta.dir, "..");
+const root = join(import.meta.dirname, "..");
 const STATUSES = new Set(["native", "extension", "script", "mapping", "difference", "n/a"]);
 const LIVE = new Set(["VERIFIED", "n/a"]);
 

@@ -3,7 +3,7 @@
 // the generator loads it, and a role label is the runtime join key between the
 // override sheet the user writes and the prose that tells the agent which role
 // to look up.
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "vitest";
 import { readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";

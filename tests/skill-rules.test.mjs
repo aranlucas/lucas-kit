@@ -3,7 +3,7 @@
 // markers for a human to resolve. A rule dropped in either reads as a clean
 // sync, so each one is pinned here by the sentence that carries it, with the
 // issue or PR that earned it.
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";

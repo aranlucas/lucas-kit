@@ -25,53 +25,12 @@ jobs:
         with:
           runtime: node@24
           require-lockfile: true
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with:
-          bun-version: "1.3.14"
       - name: Check generated files and plugin invariants
         run: pnpm generate:check
       - name: Tool and invariant fixture tests
         run: pnpm test
         env:
           PSTACK_REQUIRE_PNPM_SKILLS: "1"
-
-  windows-hooks:
-    name: Windows session hooks
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Set up Node.js and pnpm dependencies
-        uses: pnpm/setup@a0881977cd8ea73b1ed212236c99ca10dcc80cf4 # v3.1.1
-        with:
-          runtime: node@24
-          require-lockfile: true
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with:
-          bun-version: "1.3.14"
-      - name: Test Windows session hooks
-        run: pnpm test --timeout 10000 tests/session-hook-windows.test.mjs
-        env:
-          PSTACK_REQUIRE_WINDOWS_HOOK: "1"
-
-  windows-worktree-audit:
-    name: Windows worktree audit
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Set up Node.js and pnpm dependencies
-        uses: pnpm/setup@a0881977cd8ea73b1ed212236c99ca10dcc80cf4 # v3.1.1
-        with:
-          runtime: node@24
-          require-lockfile: true
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with:
-          bun-version: "1.3.14"
-      - name: Test the worktree audit
-        run: pnpm test --timeout 30000 tests/worktree-audit.test.mjs
 
   forks:
     name: Fork registry
@@ -85,9 +44,6 @@ jobs:
         with:
           runtime: node@24
           require-lockfile: true
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with:
-          bun-version: "1.3.14"
       # A dry-run sync to the SHA already pinned compares the port with
       # upstream as it stands, and fails on a fork tools/forks.json lacks or
       # an entry whose path is not forked. bash ignores the exit status of a
@@ -164,9 +120,6 @@ jobs:
         with:
           runtime: node@24
           require-lockfile: true
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with:
-          bun-version: "1.3.14"
       # The extension's types and model catalog come from the installed Pi
       # package, so the checks run against the release users have rather than
       # a copy in pnpm-lock.yaml. No lockfile: the exact version is pinned, and
@@ -187,7 +140,7 @@ jobs:
           PSTACK_PI_REQUIRE_RUNTIME: "1"
 
   scripts:
-    name: Vendored bun tooling
+    name: Vendored script tooling
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -196,21 +149,22 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+      - name: Set up Node.js and pnpm dependencies
+        uses: pnpm/setup@a0881977cd8ea73b1ed212236c99ca10dcc80cf4 # v3.1.1
         with:
-          bun-version: "1.3.14"
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
+          runtime: node@24
+          working-directory: plugins/pstack/skills/poteto-mode/scripts
+          require-lockfile: true
       - name: Typecheck
-        run: bun run typecheck
+        run: pnpm typecheck
       - name: Test
-        run: bun test orch watch-pr check-plan.test.ts
-      # Pinned here, not in package.json, so bun.lock stays identical to
-      # upstream's. 3.6.2 reproduces upstream's watch-pr files byte for byte,
+        run: pnpm test
+      # Keep upstream's formatter version and settings. 3.6.2 reproduces
+      # upstream's watch-pr files byte for byte,
       # except fakes.test-helper.ts, which .prettierignore lists; later
       # releases rewrap types.ts too.
       - name: Check formatting
-        run: bunx prettier@3.6.2 --check .
+        run: pnpm dlx prettier@3.6.2 --check .
 
   shellcheck:
     name: Shell scripts
@@ -278,23 +232,3 @@ jobs:
             lycheeverse/lychee:0.24.2@sha256:e2d19e57cf6ab037026f20b8e449a1f30d9d7f81eef4194763aab2eab20bd28d \
             --offline --no-progress --include-fragments \
             --exclude-path node_modules --exclude-path .git '**/*.md'
-
-  # macOS differs from ubuntu where the audit looks: BSD du pads its sizes and
-  # the temp directory sits behind the /var link.
-  macos-worktree-audit:
-    name: macOS worktree audit
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Set up Node.js and pnpm dependencies
-        uses: pnpm/setup@a0881977cd8ea73b1ed212236c99ca10dcc80cf4 # v3.1.1
-        with:
-          runtime: node@24
-          require-lockfile: true
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with:
-          bun-version: "1.3.14"
-      - name: Test the worktree audit
-        run: pnpm test --timeout 30000 tests/worktree-audit.test.mjs

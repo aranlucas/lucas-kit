@@ -7,7 +7,7 @@
 // PSTACK_PI_LIVE_PROVIDER (default openai), or through the `pi models:`
 // line in PSTACK_PI_LIVE_MODELS when it is set. The parent runs on the sonnet
 // alias. PSTACK_PI_LIVE_KEEP=1 keeps the throwaway directory for inspection.
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";

@@ -1,5 +1,5 @@
 // CLI regressions against installed Pi, with no model calls or credentials.
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "vitest";
 import { execFileSync, spawnSync } from "node:child_process";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -17,7 +17,7 @@ describe.skipIf(!piDir || noNode)("installed Pi child startup", () => {
   for (const [isolation, installed] of [[undefined, false], ["worktree", false], ["worktree", true]]) {
     test(`loads pstack once, isolation=${isolation}, globally installed=${installed}`, async () => {
       const { w, pi, ctx } = setup({ ctx: { model: null } });
-      if (installed) writeFileSync(join(w.agentDir, "settings.json"), JSON.stringify({ packages: [join(import.meta.dir, "../..")] }));
+      if (installed) writeFileSync(join(w.agentDir, "settings.json"), JSON.stringify({ packages: [join(import.meta.dirname, "../..")] }));
       execFileSync("git", ["init", "-b", "main", w.cwd], { stdio: "ignore" });
       execFileSync("git", ["-C", w.cwd, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "--allow-empty", "-m", "base"], { stdio: "ignore" });
       // Isolate Pi's configuration without modifying the test runner's environment.

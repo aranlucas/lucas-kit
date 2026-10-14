@@ -1,5 +1,5 @@
 // What the agent tool registers and the child command a call produces.
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "vitest";
 import { chmodSync, mkdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 

@@ -8,10 +8,9 @@ export class DeadlineExceeded extends Error {
 /** One monotonic budget shared by discovery, commands, polling and retries. */
 export class WatchDeadline {
   private readonly expiresAt: number;
-  constructor(
-    timeout: number,
-    private readonly now: () => number
-  ) {
+  private readonly now: () => number;
+  constructor(timeout: number, now: () => number) {
+    this.now = now;
     this.expiresAt = timeout > 0 ? now() + timeout : Infinity;
   }
   remaining(): number {
