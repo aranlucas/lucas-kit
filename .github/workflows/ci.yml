@@ -134,7 +134,7 @@ jobs:
         run: pnpm typecheck:pi
       # These checks make no model calls. Missing Pi fails instead of skipping.
       - name: Check the model catalog and child startup against Pi
-        run: pnpm test tests/pi/catalog.test.mjs tests/pi/runtime.test.mjs
+        run: pnpm test test/pi/catalog.test.mjs test/pi/runtime.test.mjs
         env:
           PSTACK_PI_REQUIRE_CATALOG: "1"
           PSTACK_PI_REQUIRE_RUNTIME: "1"
