@@ -1062,6 +1062,12 @@ const HOOK_FIELDS = {
   statusMessage: Type.Optional(Type.String()),
   once: Type.Optional(Type.Boolean()),
 };
+/**
+ * @template {string} Kind
+ * @template {import("typebox").TProperties} Fields
+ * @param {Kind} type
+ * @param {Fields} fields
+ */
 const hookType = (type, fields) =>
   Type.Object(
     { type: Type.Literal(type), ...fields, ...HOOK_FIELDS },
@@ -1089,6 +1095,14 @@ const HOOK_TYPES = {
   prompt: hookType("prompt", { prompt: Type.String(), model: Type.Optional(Type.String()) }),
   agent: hookType("agent", { prompt: Type.String(), model: Type.Optional(Type.String()) }),
 };
+/**
+ * @param {string} kind
+ * @returns {kind is keyof typeof HOOK_TYPES}
+ */
+function isKnownHook(kind) {
+  return Object.hasOwn(HOOK_TYPES, kind);
+}
+
 const MATCHER_GROUP = Type.Object(
   {
     matcher: Type.Optional(Type.String()),
@@ -1100,6 +1114,11 @@ const HOOKS_FILE = Type.Object({ hooks: Type.Record(Type.String(), Type.Array(MA
 
 // typebox reports an unknown key twice, as a false schema at the key and as
 // additionalProperties on its object; the second names every such key.
+/**
+ * @param {import("typebox").TSchema} schema
+ * @param {unknown} value
+ * @param {string} subject
+ */
 function schemaFaults(schema, value, subject) {
   return [...Value.Errors(schema, value)]
     .filter((error) => error.keyword !== "boolean")
@@ -1115,16 +1134,57 @@ function schemaFaults(schema, value, subject) {
 // directly must be executable, or the SessionStart hook fails silently for
 // every user.
 // The root is the variable the runtime exports with the plugin's directory.
+/**
+ * @typedef {object} HookTarget
+ * @property {number} mode
+ */
+/**
+ * @typedef {object} HookValidationOptions
+ * @property {(relativePath: string) => HookTarget | null | undefined} statOf
+ * @property {string} [file]
+ * @property {string} [root]
+ */
+/**
+ * Check one command's references in their original order.
+ * @param {string} command
+ * @param {string} event
+ * @param {string} root
+ * @param {HookValidationOptions["statOf"]} statOf
+ * @returns {string[]}
+ */
+function commandPathFaults(command, event, root, statOf) {
+  const refs = [...command.matchAll(new RegExp(`\\$\\{${root}\\}/([^"\\s]+)`, "g"))].map(
+    (m) => m[1],
+  );
+  if (!refs.length) {
+    return [`${event}: command does not reference \${${root}}: ${command}`];
+  }
+  const faults = [];
+  const executed = command.replace(/^"/, "").startsWith(`\${${root}}/`);
+  for (const [i, rel] of refs.entries()) {
+    const st = statOf(rel);
+    if (!st) faults.push(`${event}: ${rel} does not exist in the plugin`);
+    else if (i === 0 && executed && !(st.mode & 0o111))
+      faults.push(`${event}: ${rel} is not executable`);
+  }
+  return faults;
+}
+
+/**
+ * @param {string} hooksJson
+ * @param {HookValidationOptions} options
+ */
 export function validateHooks(
   hooksJson,
   { statOf, file = "hooks/hooks.json", root = "CLAUDE_PLUGIN_ROOT" },
 ) {
+  /** @type {unknown} */
   const raw = JSON.parse(hooksJson);
   const faults = schemaFaults(HOOKS_FILE, raw, "file");
-  if (faults.length) throw new Error(`${file}:\n  ${faults.join("\n  ")}`);
+  if (!Value.Check(HOOKS_FILE, raw)) throw new Error(`${file}:\n  ${faults.join("\n  ")}`);
   for (const [event, groups] of Object.entries(raw.hooks)) {
     for (const hook of groups.flatMap((group) => group.hooks)) {
-      const schema = Object.hasOwn(HOOK_TYPES, hook.type) ? HOOK_TYPES[hook.type] : undefined;
+      const schema = isKnownHook(hook.type) ? HOOK_TYPES[hook.type] : undefined;
       if (!schema) {
         faults.push(
           `${event}: hook type "${hook.type}" is not one of ${Object.keys(HOOK_TYPES).join(", ")}`,
@@ -1132,7 +1192,7 @@ export function validateHooks(
         continue;
       }
       const hookFaults = schemaFaults(schema, hook, "hook");
-      if (hookFaults.length) {
+      if (!Value.Check(schema, hook)) {
         faults.push(...hookFaults.map((fault) => `${event}: ${fault}`));
         continue;
       }
@@ -1140,20 +1200,7 @@ export function validateHooks(
       for (const command of [hook.command, hook.commandWindows].filter(
         (value) => value !== undefined,
       )) {
-        const refs = [...command.matchAll(new RegExp(`\\$\\{${root}\\}/([^"\\s]+)`, "g"))].map(
-          (m) => m[1],
-        );
-        if (!refs.length) {
-          faults.push(`${event}: command does not reference \${${root}}: ${command}`);
-          continue;
-        }
-        const executed = command.replace(/^"/, "").startsWith(`\${${root}}/`);
-        refs.forEach((rel, i) => {
-          const st = statOf(rel);
-          if (!st) faults.push(`${event}: ${rel} does not exist in the plugin`);
-          else if (i === 0 && executed && !(st.mode & 0o111))
-            faults.push(`${event}: ${rel} is not executable`);
-        });
+        faults.push(...commandPathFaults(command, event, root, statOf));
       }
     }
   }

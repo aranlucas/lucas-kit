@@ -109,7 +109,9 @@ export function parseRule(rule, i) {
 export function parseSubstitutions({ substitutions, denylist }) {
   const rules = substitutions.map(parseRule);
   substitutions.forEach((later, j) => {
-    const earlier = substitutions.slice(0, j).findIndex((r) => r.pattern && later.pattern?.includes(r.pattern));
+    const earlier = substitutions
+      .slice(0, j)
+      .findIndex((r) => r.pattern && later.pattern?.includes(r.pattern));
     if (earlier !== -1) {
       throw new Error(
         `substitutions[${j}] "${later.pattern}" contains substitutions[${earlier}] "${substitutions[earlier].pattern}", ` +
@@ -139,16 +141,20 @@ export function parseForks(registry, components) {
           throw new Error(`forks.json ${component} "${path}": ${message}`);
         };
         if (!path.startsWith(prefix)) fail(`not under ${spec.localPath}`);
-        if (entry === null || typeof entry !== "object" || Array.isArray(entry)) fail("must be an object");
+        if (entry === null || typeof entry !== "object" || Array.isArray(entry))
+          fail("must be an object");
         const unknown = Object.keys(entry).filter((field) => !FORK_FIELDS.includes(field));
         if (unknown.length) fail(`unknown field ${unknown.map((f) => `"${f}"`).join(", ")}`);
         const missing = FORK_FIELDS.filter((field) => entry[field] == null);
         if (missing.length) fail(`missing field ${missing.map((f) => `"${f}"`).join(", ")}`);
-        if (!FORK_KINDS.has(entry.kind)) fail(`unknown kind "${entry.kind}"; use port-feature or policy`);
+        if (!FORK_KINDS.has(entry.kind))
+          fail(`unknown kind "${entry.kind}"; use port-feature or policy`);
         if (typeof entry.why !== "string" || !entry.why.trim()) fail("why must be a sentence");
         if (!/^\d+\.\d+\.\d+$/.test(entry.since)) fail(`since "${entry.since}" is not a version`);
         if (entry.upstream !== "not-proposed" && !UPSTREAM_LINK.test(entry.upstream)) {
-          fail(`upstream "${entry.upstream}" is neither not-proposed nor a GitHub pull or issue URL`);
+          fail(
+            `upstream "${entry.upstream}" is neither not-proposed nor a GitHub pull or issue URL`,
+          );
         }
         forks.set(path.slice(prefix.length), entry);
       }
@@ -157,8 +163,28 @@ export function parseForks(registry, components) {
   );
 }
 
+/**
+ * @typedef {object} SubstitutionRule
+ * @property {string} key
+ * @property {string | RegExp} match
+ * @property {RegExp | null} files
+ * @property {string} replacement
+ */
+/**
+ * @typedef {object} DenylistEntry
+ * @property {string} [token]
+ * @property {string} [regex]
+ * @property {string} hint
+ */
+
 // `rules` come from parseSubstitutions.
+/**
+ * @param {string} text
+ * @param {readonly SubstitutionRule[]} rules
+ * @param {string} [rel]
+ */
 export function applySubstitutions(text, rules, rel = "") {
+  /** @type {Map<string, number>} */
   const counts = new Map();
   let out = text;
   for (const rule of rules) {
@@ -174,15 +200,22 @@ export function applySubstitutions(text, rules, rel = "") {
 }
 
 // An entry is a literal `token` or a `regex`; either fails the line it matches.
+/**
+ * @param {string} path
+ * @param {string} text
+ * @param {readonly DenylistEntry[]} denylist
+ */
 export function denylistHits(path, text, denylist) {
+  /** @type {string[]} */
   const hits = [];
-  text.split("\n").forEach((line, i) => {
+  for (const [i, line] of text.split("\n").entries()) {
     for (const { token, regex, hint } of denylist) {
-      if (token ? line.includes(token) : new RegExp(regex).test(line)) {
+      // RegExp(undefined) is empty; null must retain its native coercion.
+      if (token ? line.includes(token) : new RegExp(regex === undefined ? "" : regex).test(line)) {
         hits.push(`${path}:${i + 1}: "${token ?? regex}" — ${hint}`);
       }
     }
-  });
+  }
   return hits;
 }
 
@@ -190,7 +223,12 @@ const BINARY = /\.(png|jpe?g|gif|webp|ico|woff2?|lock)$/;
 
 // Binary by extension, by a NUL byte (git's own test), or by bytes that are
 // not UTF-8, which a decode and re-encode would replace with U+FFFD.
-const isBinary = (rel, raw) => BINARY.test(rel) || raw.includes(0) || !Buffer.from(raw.toString("utf8")).equals(raw);
+/**
+ * @param {string} rel
+ * @param {Buffer} raw
+ */
+const isBinary = (rel, raw) =>
+  BINARY.test(rel) || raw.includes(0) || !Buffer.from(raw.toString("utf8")).equals(raw);
 
 // Three-way merge one file's text. `git merge-file -p` prints the result and
 // exits with the conflict count, capped at 127, so status 0 is a clean merge and
@@ -201,20 +239,37 @@ const isBinary = (rel, raw) => BINARY.test(rel) || raw.includes(0) || !Buffer.fr
 // setting cannot add a `|||||||` base section. `-c merge.conflictStyle=merge`
 // does not hold outside a repository, where git 2.54 still applies the global
 // setting.
+/**
+ * @param {Buffer} ours
+ * @param {Buffer} base
+ * @param {Buffer} theirs
+ * @returns {{ clean: true, buffer: Buffer, hunks?: never } | { clean: false, hunks: number, buffer: Buffer }}
+ */
 export function mergeFile(ours, base, theirs) {
   const scratch = mkdtempSync(join(tmpdir(), "pstack-merge-"));
   try {
     const paths = { ours, base, theirs };
     for (const [name, buffer] of Object.entries(paths)) writeFileSync(join(scratch, name), buffer);
     const labels = ["-L", "local", "-L", "base", "-L", "upstream"];
-    const args = ["merge-file", "-p", "--no-diff3", ...labels, join(scratch, "ours"), join(scratch, "base"), join(scratch, "theirs")];
+    const args = [
+      "merge-file",
+      "-p",
+      "--no-diff3",
+      ...labels,
+      join(scratch, "ours"),
+      join(scratch, "base"),
+      join(scratch, "theirs"),
+    ];
     try {
       const merged = execFileSync("git", args, { stdio: ["ignore", "pipe", "inherit"] });
       return { clean: true, buffer: merged };
     } catch (error) {
       if (!(error.status >= 1 && error.status <= 127)) throw error;
       if (!error.stdout?.includes("<<<<<<< local")) {
-        throw new Error(`git merge-file reported conflicts (exit ${error.status}) but printed no markers`, { cause: error });
+        throw new Error(
+          `git merge-file reported conflicts (exit ${error.status}) but printed no markers`,
+          { cause: error },
+        );
       }
       return { clean: false, hunks: error.status, buffer: error.stdout };
     }
@@ -225,13 +280,18 @@ export function mergeFile(ours, base, theirs) {
 
 // Call only on differing bytes. `--no-index` exits 1 when the two differ, and
 // also on errors, which print no numstat line.
+/**
+ * @param {Buffer} base
+ * @param {Buffer} kept
+ */
 export function changedLines(base, kept) {
   const scratch = mkdtempSync(join(tmpdir(), "pstack-diff-"));
   try {
     writeFileSync(join(scratch, "kept"), kept);
     const args = ["diff", "--no-index", "--numstat", "--text", "-", join(scratch, "kept")];
     const diff = spawnSync("git", args, { input: base, encoding: "utf8" });
-    if (diff.status !== 1 || !diff.stdout) throw new Error(`git diff --no-index failed: ${diff.stderr}`);
+    if (diff.status !== 1 || !diff.stdout)
+      throw new Error(`git diff --no-index failed: ${diff.stderr}`);
     const [added, removed] = diff.stdout.split("\t").map(Number);
     return added + removed;
   } finally {
@@ -242,6 +302,10 @@ export function changedLines(base, kept) {
 // Paths the port deliberately does not carry (upstream.json `exclude`). An
 // entry matches a path relative to the component root exactly or as its
 // directory prefix; a trailing slash is optional and changes nothing.
+/**
+ * @param {string} rel
+ * @param {readonly string[]} exclude
+ */
 export function isExcluded(rel, exclude) {
   return exclude.some((entry) => {
     const prefix = entry.replace(/\/$/, "");
@@ -249,18 +313,48 @@ export function isExcluded(rel, exclude) {
   });
 }
 
+/** @param {number} mode */
 const gitMode = (mode) => (mode & 0o100 ? 0o755 : 0o644);
 
+/**
+ * @typedef {object} FileData
+ * @property {Buffer} bytes
+ * @property {Map<string, number>} [counts]
+ * @property {boolean} [binary]
+ */
+/** @typedef {FileData & { mode: number, symlink?: false }} FileVersion */
+/** @typedef {FileVersion & { counts: Map<string, number> }} UpstreamFile */
+/** @typedef {{ symlink: true, bytes?: never, mode?: never, counts?: never, binary?: never }} SymlinkVersion */
+/** @typedef {FileVersion | SymlinkVersion | null} Version */
+
+/**
+ * @template {FileData} Data
+ * @param {number} mode
+ * @param {() => Data} load
+ * @returns {{ mode: number, bytes: Buffer, counts: (Data & FileData)["counts"], binary: (Data & FileData)["binary"] }}
+ */
 const lazyFile = (mode, load) => {
+  /** @type {(Data & FileData) | undefined} */
   let loaded;
   return {
     mode,
-    get bytes() { return (loaded ??= load()).bytes; },
-    get counts() { return (loaded ??= load()).counts; },
-    get binary() { return (loaded ??= load()).binary; },
+    get bytes() {
+      return (loaded ??= load()).bytes;
+    },
+    get counts() {
+      return (loaded ??= load()).counts;
+    },
+    get binary() {
+      return (loaded ??= load()).binary;
+    },
   };
 };
 
+/**
+ * @param {Version} a
+ * @param {Version} b
+ * @returns {boolean}
+ */
 const same = (a, b) => Boolean(a?.bytes && b?.bytes?.equals(a.bytes) && a.mode === b.mode);
 // A file new upstream that the port already wrote has no common ancestor.
 // An empty base makes every shared line a coincidence, which is what it is.
@@ -275,19 +369,57 @@ const NO_COMMON_ANCESTOR = Buffer.alloc(0);
 // `write: { bytes, mode }` and `counts` for a file to write, `kept` for local
 // bytes left in place, `changed` for a fork's changed-line count, and `hunks`
 // for a conflict.
+/** @typedef {"added" | "updated" | "merged" | "conflicted"} WriteKind */
+/** @typedef {{ write: { bytes: Buffer, mode: number }, counts: Map<string, number> }} WriteDetails */
+/** @typedef {{ write?: never, counts?: never, kept?: never, changed?: never, hunks?: never }} NoDetails */
+/**
+ * @template {string} Kind
+ * @template {object} [Details=object]
+ * @typedef {{ kind: Kind } & Omit<NoDetails, keyof Details> & Details} Outcome
+ */
+/**
+ * @typedef {Outcome<"added" | "updated" | "merged", WriteDetails> |
+ *   Outcome<"conflicted", WriteDetails & { hunks: number }> |
+ *   Outcome<"deleted" | "symlink" | "binary-conflict"> |
+ *   Outcome<"unchanged" | "removed-upstream" | "mode-only", { kept: Buffer }> |
+ *   Outcome<"forked", { kept: Buffer, changed: number }>} Classified
+ */
+/** @typedef {Classified | Outcome<"excluded" | "port-only">} ComponentOutcome */
+/**
+ * @param {{ old?: UpstreamFile | SymlinkVersion | null, new?: UpstreamFile | SymlinkVersion | null, local?: Version }} versions
+ * @returns {Classified | null}
+ */
 export function classify({ old = null, new: next = null, local = null }) {
   if (next?.symlink || local?.symlink) return { kind: "symlink" };
   if (!next) {
     if (!local) return null;
     return same(old, local) ? { kind: "deleted" } : { kind: "removed-upstream", kept: local.bytes };
   }
-  const writing = (kind, bytes = next.bytes, mode = next.mode) => ({ kind, write: { bytes, mode }, counts: next.counts });
+  /**
+   * @template {WriteKind} Kind
+   * @param {Kind} kind
+   * @param {Buffer} [bytes]
+   * @param {number} [mode]
+   * @returns {Outcome<Kind, WriteDetails>}
+   */
+  const writing = (kind, bytes = next.bytes, mode = next.mode) => ({
+    kind,
+    write: { bytes, mode },
+    counts: next.counts,
+  });
   if (!local) return writing("added");
   if (same(local, next)) return { kind: "unchanged", kept: local.bytes };
   if (same(local, old)) return writing("updated");
   if (same(old, next)) {
-    if (local.bytes.equals(old.bytes)) return { kind: "mode-only", kept: local.bytes };
-    return { kind: "forked", kept: local.bytes, changed: changedLines(old.bytes, local.bytes) };
+    // SAFETY: same's successful bytes/mode comparison proves old is a file
+    // in the closed Version union. False equality does not prove a non-file.
+    const previous = /** @type {FileVersion} */ (old);
+    if (local.bytes.equals(previous.bytes)) return { kind: "mode-only", kept: local.bytes };
+    return {
+      kind: "forked",
+      kept: local.bytes,
+      changed: changedLines(previous.bytes, local.bytes),
+    };
   }
   if (next.binary || local.binary) return { kind: "binary-conflict" };
   const merged = mergeFile(local.bytes, old?.bytes ?? NO_COMMON_ANCESTOR, next.bytes);
@@ -300,11 +432,16 @@ export function classify({ old = null, new: next = null, local = null }) {
 }
 
 // Outcomes that leave port edits on top of upstream's text or mode.
+/** @type {ReadonlySet<string | undefined>} */
 const FORK_OUTCOMES = new Set(["forked", "mode-only", "merged", "conflicted"]);
 
 // What the filesystem finds at `name` in `dir`, a link itself and never its
 // target. Where the filesystem folds case or normalises Unicode, that can be
 // an entry `dir` lists under another spelling.
+/**
+ * @param {string} dir
+ * @param {string} name
+ */
 const lstatIn = (dir, name) => lstatSync(join(dir, name), { throwIfNoEntry: false });
 
 // Compare old-upstream vs new-upstream vs local for one component tree.
@@ -316,6 +453,41 @@ const lstatIn = (dir, name) => lstatSync(join(dir, name), { throwIfNoEntry: fals
 // sync goes ahead. `lookUp` is the one question whose answer depends on how
 // the filesystem folds names, so a test can stand in for a filesystem that
 // folds. Returns the report and, unless dryRun, applies it.
+/**
+ * @typedef {object} SyncReport
+ * @property {{ kind: WriteKind, rel: string }[]} written
+ * @property {string[]} deleted
+ * @property {{ rel: string, changed: number, modeOnly?: boolean }[]} forked
+ * @property {string[]} portOnly
+ * @property {({ rel: string, reason: "conflict", hunks: number } | { rel: string, reason: "symlink" | "removed-upstream", hunks?: never })[]} conflicts
+ * @property {string[]} binaryConflicts
+ * @property {{ rel: string, reason: string }[]} collisions
+ * @property {string[]} undeclared
+ * @property {{ rel: string, reason: string }[]} stale
+ * @property {number} unchanged
+ * @property {number} excluded
+ * @property {Map<string, number>} counts
+ * @property {string[]} hits
+ */
+/**
+ * @typedef {object} SyncOptions
+ * @property {string} oldDir
+ * @property {string} newDir
+ * @property {string} localDir
+ * @property {readonly SubstitutionRule[]} rules
+ * @property {readonly DenylistEntry[]} [denylist]
+ * @property {readonly string[]} [exclude]
+ * @property {readonly string[]} [carriedElsewhere]
+ * @property {(rel: string, text: string) => string} [derive]
+ * @property {ReadonlyMap<string, unknown> | null} [forks]
+ * @property {boolean} [atPin]
+ * @property {boolean} [dryRun]
+ * @property {(dir: string, name: string) => { ino: number } | undefined} [lookUp]
+ */
+/**
+ * @param {SyncOptions} options
+ * @returns {SyncReport}
+ */
 export function syncComponent({
   oldDir,
   newDir,
@@ -330,6 +502,7 @@ export function syncComponent({
   dryRun = false,
   lookUp = lstatIn,
 }) {
+  /** @type {SyncReport} */
   const report = {
     written: [],
     deleted: [],
@@ -345,13 +518,25 @@ export function syncComponent({
     counts: new Map(),
     hits: [],
   };
+  /**
+   * @param {string} rel
+   * @param {Buffer} raw
+   * @returns {FileData & { counts: Map<string, number> }}
+   */
   const portForm = (rel, raw) => {
     if (isBinary(rel, raw)) return { bytes: raw, counts: new Map(), binary: true };
     const sub = applySubstitutions(raw.toString("utf8"), rules, rel);
     return { bytes: Buffer.from(derive(rel, sub.text)), counts: sub.counts };
   };
+  /** @param {string} dir */
   const listed = (dir) => new Set(walk(dir).map((file) => relative(dir, file)));
   const [oldPaths, newPaths, localPaths] = [listed(oldDir), listed(newDir), listed(localDir)];
+  /**
+   * @param {string} dir
+   * @param {ReadonlySet<string>} paths
+   * @param {string} rel
+   * @returns {UpstreamFile | SymlinkVersion | null}
+   */
   const upstream = (dir, paths, rel) => {
     if (!paths.has(rel)) return null;
     const file = join(dir, rel);
@@ -361,6 +546,10 @@ export function syncComponent({
     if (stat.isSymbolicLink()) return { symlink: true };
     return lazyFile(gitMode(stat.mode), () => portForm(rel, readFileSync(file)));
   };
+  /**
+   * @param {string} rel
+   * @returns {Version}
+   */
   const portCopy = (rel) => {
     // The walk decides what exists. Where the filesystem folds case it answers
     // for Foo.md when asked about foo.md, and anywhere it answers for a
@@ -378,9 +567,21 @@ export function syncComponent({
   const elsewhere = new Set(carriedElsewhere);
   // A port link where upstream has a directory is reported at the link, and
   // nothing under it is read or written, since each write would land in its target.
-  const dirsAbove = (rel) => rel.split("/").slice(0, -1).map((_, i, parts) => parts.slice(0, i + 1).join("/"));
-  const upstreamDirs = new Set([...oldPaths, ...newPaths].filter((rel) => !isExcluded(rel, exclude)).flatMap(dirsAbove));
+  /** @param {string} rel */
+  const dirsAbove = (rel) =>
+    rel
+      .split("/")
+      .slice(0, -1)
+      .map((_, i, parts) => parts.slice(0, i + 1).join("/"));
+  const upstreamDirs = new Set(
+    [...oldPaths, ...newPaths].filter((rel) => !isExcluded(rel, exclude)).flatMap(dirsAbove),
+  );
+  /** @param {string} rel */
   const isLink = (rel) => localPaths.has(rel) && lstatSync(join(localDir, rel)).isSymbolicLink();
+  /**
+   * @param {string} rel
+   * @returns {ComponentOutcome | null}
+   */
   const outcomeOf = (rel) => {
     if (isExcluded(rel, exclude)) return newPaths.has(rel) ? { kind: "excluded" } : null;
     if (dirsAbove(rel).some(isLink)) return null;
@@ -389,7 +590,11 @@ export function syncComponent({
       return elsewhere.has(rel) ? null : { kind: "port-only" };
     }
     try {
-      return classify({ old: upstream(oldDir, oldPaths, rel), new: upstream(newDir, newPaths, rel), local: portCopy(rel) });
+      return classify({
+        old: upstream(oldDir, oldPaths, rel),
+        new: upstream(newDir, newPaths, rel),
+        local: portCopy(rel),
+      });
     } catch (error) {
       throw new Error(`${rel}: ${error.message}`, { cause: error });
     }
@@ -407,10 +612,15 @@ export function syncComponent({
   // filesystem folds is its own business, so it is asked and never modelled. A
   // deleted path needs no check, since it comes from the walk and every part
   // of it is a listed name.
+  /**
+   * @param {string} rel
+   * @returns {[string, string] | null}
+   */
   const blockerOf = (rel) => {
     const parts = rel.split("/");
     let dir = localDir;
     for (const [i, part] of parts.entries()) {
+      /** @param {string} name */
       const pathTo = (name) => [...parts.slice(0, i), name].join("/");
       const entries = readdirSync(dir, { withFileTypes: true });
       const entry = entries.find(({ name }) => name === part);
@@ -418,53 +628,76 @@ export function syncComponent({
         const found = lookUp(dir, part);
         if (!found) return null;
         const twin = entries.find(({ name }) => lstatSync(join(dir, name)).ino === found.ino);
-        return [pathTo(twin?.name ?? part), `the same entry as upstream's ${pathTo(part)} on this filesystem`];
+        return [
+          pathTo(twin?.name ?? part),
+          `the same entry as upstream's ${pathTo(part)} on this filesystem`,
+        ];
       }
       const last = i === parts.length - 1;
-      if (last && entry.isDirectory()) return [pathTo(part), "a directory where upstream has a file"];
-      if (!last && !entry.isDirectory()) return [pathTo(part), "a file where upstream has a directory"];
+      if (last && entry.isDirectory())
+        return [pathTo(part), "a directory where upstream has a file"];
+      if (!last && !entry.isDirectory())
+        return [pathTo(part), "a file where upstream has a directory"];
       dir = join(dir, part);
     }
     return null;
   };
+  /** @type {Map<string, string>} */
   const collisions = new Map();
   for (const { rel, write } of outcomes) {
     const blocker = write && blockerOf(rel);
     if (blocker) collisions.set(...blocker);
   }
-  report.collisions = [...collisions].map(([rel, reason]) => ({ rel, reason })).sort((a, b) => a.rel.localeCompare(b.rel));
+  report.collisions = [...collisions]
+    .map(([rel, reason]) => ({ rel, reason }))
+    .toSorted((a, b) => a.rel.localeCompare(b.rel));
 
   for (const { rel, kind, write, kept, counts, changed, hunks } of outcomes) {
     const scanned = write?.bytes ?? kept;
-    if (scanned && !isBinary(rel, scanned)) report.hits.push(...denylistHits(rel, scanned.toString("utf8"), denylist));
+    if (scanned && !isBinary(rel, scanned))
+      report.hits.push(...denylistHits(rel, scanned.toString("utf8"), denylist));
     if (write) {
       report.written.push({ kind, rel });
-      counts.forEach((n, p) => report.counts.set(p, (report.counts.get(p) ?? 0) + n));
+      for (const [p, n] of counts) report.counts.set(p, (report.counts.get(p) ?? 0) + n);
     }
     if (kind === "unchanged") report.unchanged++;
     else if (kind === "excluded") report.excluded++;
     else if (kind === "forked") report.forked.push({ rel, changed });
     else if (kind === "mode-only") report.forked.push({ rel, changed: 0, modeOnly: true });
     else if (kind === "conflicted") report.conflicts.push({ rel, reason: "conflict", hunks });
-    else if (kind === "symlink" || kind === "removed-upstream") report.conflicts.push({ rel, reason: kind });
+    else if (kind === "symlink" || kind === "removed-upstream")
+      report.conflicts.push({ rel, reason: kind });
     else if (kind === "binary-conflict") report.binaryConflicts.push(rel);
     else if (kind === "deleted") report.deleted.push(rel);
     else if (kind === "port-only") report.portOnly.push(rel);
-    else if (!["added", "updated", "merged"].includes(kind)) throw new Error(`${rel}: no report entry for ${kind}`);
+    else if (!["added", "updated", "merged"].includes(kind))
+      throw new Error(`${rel}: no report entry for ${kind}`);
   }
-  report.forked.sort((a, b) => b.changed - a.changed);
+  report.forked = report.forked.toSorted((a, b) => b.changed - a.changed);
   if (forks) {
     const outcomeOfPath = new Map(outcomes.map(({ rel, kind }) => [rel, kind]));
-    report.undeclared = outcomes.filter(({ rel, kind }) => FORK_OUTCOMES.has(kind) && !forks.has(rel)).map(({ rel }) => rel);
+    report.undeclared = outcomes
+      .filter(({ rel, kind }) => FORK_OUTCOMES.has(kind) && !forks.has(rel))
+      .map(({ rel }) => rel);
     for (const rel of forks.keys()) {
       const kind = outcomeOfPath.get(rel);
       if (FORK_OUTCOMES.has(kind)) continue;
-      const reason = localPaths.has(rel) ? `is no longer forked${kind ? ` (${kind})` : ""}` : "no longer exists";
+      const reason = localPaths.has(rel)
+        ? `is no longer forked${kind ? ` (${kind})` : ""}`
+        : "no longer exists";
       report.stale.push({ rel, reason });
     }
   }
 
-  if (report.hits.length || report.binaryConflicts.length || report.collisions.length || report.undeclared.length || (atPin && (report.stale.length || report.written.length)) || dryRun) return report;
+  if (
+    report.hits.length ||
+    report.binaryConflicts.length ||
+    report.collisions.length ||
+    report.undeclared.length ||
+    (atPin && (report.stale.length || report.written.length)) ||
+    dryRun
+  )
+    return report;
   for (const { rel, kind, write } of outcomes) {
     const localFile = join(localDir, rel);
     if (write) {
@@ -482,6 +715,7 @@ export function syncComponent({
   return report;
 }
 
+/** @param {readonly string[]} args */
 function git(args) {
   return execFileSync("git", args, { encoding: "utf8", stdio: ["ignore", "pipe", "inherit"] });
 }
@@ -511,15 +745,19 @@ function main() {
   const spec = upstream.components[component];
   if (stray.length || !spec || !newSha?.match(/^[0-9a-f]{7,40}$/)) {
     for (const arg of stray) console.error(`unexpected argument: ${JSON.stringify(arg)}`);
-    console.error(`usage: node tools/sync.mjs <${Object.keys(upstream.components).join("|")}> <new-sha> [--dry-run]`);
+    console.error(
+      `usage: node tools/sync.mjs <${Object.keys(upstream.components).join("|")}> <new-sha> [--dry-run]`,
+    );
     process.exit(2);
   }
   const { substitutions, denylist } = parseSubstitutions(
     JSON.parse(readFileSync(join(repo, "tools/substitutions.json"), "utf8")),
   );
   const forks =
-    parseForks(JSON.parse(readFileSync(join(repo, "tools/forks.json"), "utf8")), upstream.components)[component] ??
-    new Map();
+    parseForks(
+      JSON.parse(readFileSync(join(repo, "tools/forks.json"), "utf8")),
+      upstream.components,
+    )[component] ?? new Map();
   const models = loadModels(repo);
   const leads = loadLeadLines(repo);
 
@@ -533,7 +771,8 @@ function main() {
     };
     const oldDir = co(spec.sha, join(scratch, "old"));
     const newDir = co(newSha, join(scratch, "new"));
-    const atPin = git(["-C", oldDir, "rev-parse", "HEAD"]) === git(["-C", newDir, "rev-parse", "HEAD"]);
+    const atPin =
+      git(["-C", oldDir, "rev-parse", "HEAD"]) === git(["-C", newDir, "rev-parse", "HEAD"]);
 
     const report = syncComponent({
       oldDir,
@@ -542,14 +781,20 @@ function main() {
       rules: substitutions,
       denylist,
       exclude: spec.exclude ?? [],
-      carriedElsewhere: pathsOtherComponentsCarry(join(scratch, "clone"), upstream.components, component),
+      carriedElsewhere: pathsOtherComponentsCarry(
+        join(scratch, "clone"),
+        upstream.components,
+        component,
+      ),
       derive: (rel, text) => deriveSkill(join(spec.localPath, rel), text, models, leads),
       forks,
       atPin,
       dryRun,
     });
 
-    console.log(`\n${dryRun ? "dry run; " : ""}unchanged: ${report.unchanged} files, excluded: ${report.excluded}`);
+    console.log(
+      `\n${dryRun ? "dry run; " : ""}unchanged: ${report.unchanged} files, excluded: ${report.excluded}`,
+    );
     for (const { kind, rel } of report.written) console.log(`${kind}: ${rel}`);
     for (const rel of report.deleted) console.log(`deleted: ${rel}`);
     for (const [pattern, n] of report.counts) console.log(`substituted: "${pattern}" x${n}`);
@@ -570,42 +815,71 @@ function main() {
       for (const rel of report.portOnly) console.log(`  ${spec.localPath}/${rel}`);
     }
     if (report.conflicts.length) {
-      console.log(`\nneeds a human: ${report.conflicts.length} (a conflict is written with git's markers):`);
+      console.log(
+        `\nneeds a human: ${report.conflicts.length} (a conflict is written with git's markers):`,
+      );
       for (const c of report.conflicts) {
-        const detail = c.reason === "conflict" ? `conflict, ${c.hunks} hunk${c.hunks === 1 ? "" : "s"}` : c.reason;
+        const detail =
+          c.reason === "conflict"
+            ? `conflict, ${c.hunks} hunk${c.hunks === 1 ? "" : "s"}`
+            : c.reason;
         console.log(`  ${spec.localPath}/${c.rel} (${detail})`);
       }
     }
     if (report.binaryConflicts.length) {
-      console.error(`\nFAIL: binary files changed upstream and in the port cannot carry conflict markers;`);
-      console.error(`replace each with upstream's version or add it to exclude in tools/upstream.json, then rerun:`);
+      console.error(
+        `\nFAIL: binary files changed upstream and in the port cannot carry conflict markers;`,
+      );
+      console.error(
+        `replace each with upstream's version or add it to exclude in tools/upstream.json, then rerun:`,
+      );
       for (const rel of report.binaryConflicts) console.error(`  ${spec.localPath}/${rel}`);
     }
     if (report.collisions.length) {
-      console.error(`\nFAIL: port paths the tree cannot hold next to upstream's; rename or delete each, then rerun:`);
-      for (const { rel, reason } of report.collisions) console.error(`  ${spec.localPath}/${rel} (${reason})`);
+      console.error(
+        `\nFAIL: port paths the tree cannot hold next to upstream's; rename or delete each, then rerun:`,
+      );
+      for (const { rel, reason } of report.collisions)
+        console.error(`  ${spec.localPath}/${rel} (${reason})`);
     }
     if (report.hits.length) {
-      console.error(`\nFAIL: Cursor-isms in synced files; add a substitution or rewrite by hand, then rerun:`);
+      console.error(
+        `\nFAIL: Cursor-isms in synced files; add a substitution or rewrite by hand, then rerun:`,
+      );
       for (const h of report.hits) console.error(`  ${spec.localPath}/${h}`);
     }
     if (atPin && report.stale.length) {
-      console.error(`\nFAIL: tools/forks.json declares paths under ${component} that are not forked at the pinned SHA; delete each entry, then rerun:`);
-      for (const { rel, reason } of report.stale) console.error(`  ${spec.localPath}/${rel} ${reason}`);
+      console.error(
+        `\nFAIL: tools/forks.json declares paths under ${component} that are not forked at the pinned SHA; delete each entry, then rerun:`,
+      );
+      for (const { rel, reason } of report.stale)
+        console.error(`  ${spec.localPath}/${rel} ${reason}`);
     } else {
       for (const { rel, reason } of report.stale) {
-        console.error(`warning: tools/forks.json declares ${spec.localPath}/${rel} under ${component}, but it ${reason}; delete the entry`);
+        console.error(
+          `warning: tools/forks.json declares ${spec.localPath}/${rel} under ${component}, but it ${reason}; delete the entry`,
+        );
       }
     }
     if (atPin && report.written.length) {
-      console.error(`\nFAIL: upstream files the port lacks at the pinned SHA; restore each or add it to exclude in tools/upstream.json, then rerun:`);
+      console.error(
+        `\nFAIL: upstream files the port lacks at the pinned SHA; restore each or add it to exclude in tools/upstream.json, then rerun:`,
+      );
       for (const { rel } of report.written) console.error(`  ${spec.localPath}/${rel}`);
     }
     if (report.undeclared.length) {
-      console.error(`\nFAIL: forks with no entry under ${component} in tools/forks.json; declare each or restore upstream's form, then rerun:`);
+      console.error(
+        `\nFAIL: forks with no entry under ${component} in tools/forks.json; declare each or restore upstream's form, then rerun:`,
+      );
       for (const rel of report.undeclared) console.error(`  ${spec.localPath}/${rel}`);
     }
-    if (report.binaryConflicts.length || report.collisions.length || report.hits.length || report.undeclared.length || (atPin && (report.stale.length || report.written.length))) {
+    if (
+      report.binaryConflicts.length ||
+      report.collisions.length ||
+      report.hits.length ||
+      report.undeclared.length ||
+      (atPin && (report.stale.length || report.written.length))
+    ) {
       process.exitCode = 1;
       return;
     }
@@ -615,9 +889,12 @@ function main() {
     writeFileSync(upstreamPath, JSON.stringify(upstream, null, 2) + "\n");
     console.log(`\npinned: ${component} -> ${newSha}`);
     for (const c of report.conflicts) {
-      if (c.reason === "removed-upstream") console.log(`  now port-only: ${spec.localPath}/${c.rel}`);
+      if (c.reason === "removed-upstream")
+        console.log(`  now port-only: ${spec.localPath}/${c.rel}`);
     }
-    console.log("next: resolve the conflict markers, review the diff, write the CHANGES.md entry from this report (name each now port-only file), run node tools/generate.mjs (it fails while a marker remains)");
+    console.log(
+      "next: resolve the conflict markers, review the diff, write the CHANGES.md entry from this report (name each now port-only file), run node tools/generate.mjs (it fails while a marker remains)",
+    );
   } finally {
     rmSync(scratch, { recursive: true, force: true });
   }
