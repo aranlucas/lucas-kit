@@ -12,3 +12,7 @@ This distribution contains MIT-licensed work from the upstream sources below. Th
 | `thermos`, `thermo-nuclear-review`, `thermo-nuclear-code-quality-review`, and the `thermo-nuclear-review-subagent` and `thermo-nuclear-code-quality-review-subagent` definitions | [cursor/plugins/thermos](https://github.com/cursor/plugins/tree/118e73b0e196e4d49d5aade7ce6dd8985a621f68/thermos) | (c) 2026 Cursor | [MIT](LICENSE-thermos) |
 
 The pstack-claude port changes runtime names, tool calls, model defaults, and supporting prose. The port's modifications and additions are (c) 2026 Michael Denyer under the same [MIT license](LICENSE). The [repository notice](https://github.com/michael-denyer/pstack-claude/blob/main/NOTICE.md) records full provenance. The [change log](https://github.com/michael-denyer/pstack-claude/blob/main/CHANGES.md) records each release, and [`tools/forks.json`](https://github.com/michael-denyer/pstack-claude/blob/main/tools/forks.json) names each file the port forks and why.
+
+## Be ambitious
+
+`be-ambitious` is copied from [DannyMac180/skills](https://github.com/DannyMac180/skills/tree/main/be-ambitious), copyright (c) 2026 Dan McAteer, under the MIT license. Its license is included in the `be-ambitious` skill directory. The skill credits a prompt shared by Felix Rieseberg (Anthropic).
