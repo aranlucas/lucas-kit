@@ -449,6 +449,66 @@
       "pattern": "skeptical Bugbot triage",
       "replacement": "skeptical review-bot triage",
       "rationale": "same routing, in the autopilot owner loop"
+    },
+    {
+      "pattern": "Families go by prefix: `claude-*`, and `grok-*` with `cursor-grok-*` and `composer-*`.",
+      "files": "^skills/(?:arena|interrogate)/SKILL\\.md$",
+      "replacement": "Families go by model name, such as Opus, Fable, or Sonnet.",
+      "rationale": "Cursor provider slugs do not name Claude Code model families; these skills use their configured model defaults"
+    },
+    {
+      "regex": "\\| Reviewer B \\| `(?:claude|gpt|grok|gemini|composer)-[^`]+` \\|",
+      "files": "^skills/interrogate/SKILL\\.md$",
+      "replacement": "| Reviewer B | `fable` |",
+      "rationale": "the port's interrogate panel maps Reviewer B to the Fable alias"
+    },
+    {
+      "pattern": "A refused `composer-*` entry runs on `grok-4.7-xhigh-fast`.",
+      "files": "^skills/arena/SKILL\\.md$",
+      "replacement": "A refused configured entry runs on that role's default in [Models](#models).",
+      "rationale": "model fallback comes from the port's configured role defaults"
+    },
+    {
+      "pattern": "(`grok-4.7-xhigh-fast` by default)",
+      "files": "^skills/poteto-mode/SKILL\\.md$",
+      "replacement": "(the default in [Models](#models))",
+      "rationale": "the verification model is stamped from the port's Models configuration"
+    },
+    {
+      "pattern": "Each owner is a Cursor cloud agent",
+      "files": "^skills/poteto-mode/playbooks/autopilot-full\\.md$",
+      "replacement": "Each owner is a background subagent in its own worktree",
+      "rationale": "Claude Code subagents run locally; a worktree keeps each PR owner isolated"
+    },
+    {
+      "pattern": "its driver skill (such as `control-ui` or `control-cli` from `cursor-team-kit`) or a named driver",
+      "files": "^skills/poteto-mode/playbooks/autopilot-full\\.md$",
+      "replacement": "the resolved driver skill",
+      "rationale": "the port resolves the runtime-specific driver skill through poteto-mode's Non-negotiables"
+    },
+    {
+      "pattern": "each a Cursor cloud agent, runs the change the way a user would with the matching driver skill (such as `control-ui` or `control-cli` from `cursor-team-kit`), parent against head",
+      "files": "^skills/poteto-mode/playbooks/shipping\\.md$",
+      "replacement": "each in its own worktree, exercises the change against parent versus head through the resolved driver skill",
+      "rationale": "Claude Code runs local subagents, and the port resolves a surface driver through poteto-mode rather than cursor-team-kit skills"
+    },
+    {
+      "regex": "- \\*\\*Worker / verifier\\.\\*\\* Always `environment: \"cloud\"`.*",
+      "files": "^skills/poteto-mode/playbooks/orchestrate\\.md$",
+      "replacement": "- **Worker / verifier.** Background subagents (`run_in_background: true`). Claude Code has no remote worker environment, so isolation is a worktree or branch per writer, not a separate machine. Runtime verification goes through the driver skill. The brief names its resolved skill path or exact commands. A subagent never sees this chat, so its brief inlines what it needs or points at repo and store paths. Prefer fewer, broader workers. One writer per worktree or branch (principle-separate-before-serializing-shared-state). Run a unit's verifier on a different model family from its worker.",
+      "rationale": "the port runs subagents locally, resolves runtime verification through its driver policy, and stores transcripts under Claude Code's project directory"
+    },
+    {
+      "pattern": "nesting works to depth 3, and a nested spawn has the full Task schema including `environment`",
+      "files": "^skills/poteto-mode/playbooks/orchestrate\\.md$",
+      "replacement": "nested spawning depends on runtime support",
+      "rationale": "Claude Code's Agent tool does not expose Cursor's cloud environment field or guarantee the same nested-spawn depth"
+    },
+    {
+      "pattern": "State reads and writes go through `scripts/orch/orch.ts` at drain points, one command in and one line out.",
+      "files": "^skills/poteto-mode/playbooks/orchestrate\\.md$",
+      "replacement": "State reads and writes go through `node skills/poteto-mode/scripts/orch/orch.ts` at drain points, one command in and one line out.",
+      "rationale": "the installed port invokes the store CLI with Node.js from the plugin's skills directory"
     }
   ],
   "denylist": [

@@ -4,7 +4,7 @@ Start with the [README](../README.md) for installation and your first task.
 
 ## Slash commands
 
-The package includes 62 skill directories: 38 public skills and 24 `principle-*` references. Claude Code uses `/lucas-kit:<name>`, and Pi uses `/skill:<name>`. In Codex, request a skill by name or install the [optional shortcuts](#codex) for the `/name` form below.
+The package includes 64 skill directories: 40 public skills and 24 `principle-*` references. Claude Code uses `/lucas-kit:<name>`, and Pi uses `/skill:<name>`. In Codex, request a skill by name or install the [optional shortcuts](#codex) for the `/name` form below.
 
 Find each skill's instructions in the [skills tree](../plugins/pstack/skills/).
 
@@ -12,6 +12,8 @@ Find each skill's instructions in the [skills tree](../plugins/pstack/skills/).
 | --- | --- |
 | `/poteto-mode` | default entry point for any non-trivial task |
 | `/be-ambitious` | deepen a task or prompt with expert methods, primary sources, and external verification while keeping its scope |
+| `/in-your-own-words` | restate the user’s goal and the problem to solve |
+| `/sharpen` | sharpen the approach, goal, scope, and outside check before starting |
 | `/how` | walk through how a subsystem works |
 | `/why` | investigate why something was built this way (parallel multi-MCP evidence) |
 | `/architect` | settle types and module shape before writing code that crosses a function boundary |
@@ -175,9 +177,9 @@ Install dependencies for the workflows you use:
 
 | Dependency | When you need it |
 | --- | --- |
-| GitHub CLI, `gh` | PR monitoring and shipping. Authenticate with `gh auth login`. |
+| GitHub CLI, `gh` | PR monitoring and the default forge for orchestration and shipping. Authenticate with `gh auth login`. |
+| Origin CLI, `origin` | PR operations and orchestration frontiers when the repository uses Origin. `orch frontier set` accepts `--forge origin`. |
 | Node.js 24.2+ and pnpm 12.11.0 | The bundled `watch-pr` and `orch` scripts. Their bootstrap installs locked production dependencies on first run. |
-| Graphite CLI, `gt` | The Orchestrate playbook and `orch` stack frontier. Shipping and autopilot playbooks use `gh` or Origin's CLI when available. |
 | `plugin-dev` | Claude Code skill-authoring guidance used by `automate-me`, `reflect`, and `poteto-mode`. |
 
 Install the Claude Code skill-authoring companion with:
