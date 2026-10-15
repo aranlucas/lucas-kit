@@ -1277,7 +1277,12 @@ function branchSha({
 }
 
 function currentBranch(repo: string): string {
-  return runGit({ args: ["symbolic-ref", "--short", "HEAD"], repo });
+  const ref = runGit({ args: ["symbolic-ref", "HEAD"], repo });
+  const prefix = "refs/heads/";
+  if (!ref.startsWith(prefix) || ref.length === prefix.length) {
+    throw new UserError(`HEAD does not point to a local branch: ${ref}`);
+  }
+  return ref.slice(prefix.length);
 }
 
 function trunkBranch(repo: string): string {
