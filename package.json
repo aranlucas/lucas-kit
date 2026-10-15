@@ -42,11 +42,14 @@
     "lint:fix": "oxlint --fix",
     "format": "oxfmt --write",
     "format:check": "oxfmt --check",
-    "lint:test": "oxlint --config node_modules/@aranlucas/oxforge/configs/vitest.json test --deny-warnings"
+    "lint:test": "oxlint --config node_modules/@aranlucas/oxforge/configs/vitest.json test --deny-warnings",
+    "prepare": "husky"
   },
   "devDependencies": {
     "@aranlucas/oxforge": "0.2.2",
     "@types/node": "24.19.2",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.6.0",
     "oxfmt": "^0.73.0",
     "oxlint": "^1.88.0",
     "oxlint-tsgolint": "^7.0.2004",
@@ -71,6 +74,15 @@
     ],
     "extensions": [
       "./plugins/pstack/pi/index.ts"
+    ]
+  },
+  "lint-staged": {
+    "*.{js,jsx,ts,tsx,mjs,cjs,mts,cts}": [
+      "oxlint --fix --no-error-on-unmatched-pattern",
+      "oxfmt --config oxfmt.config.ts --no-error-on-unmatched-pattern"
+    ],
+    "*.{json,jsonc,json5,css,scss,md,mdx,yml,yaml,html,toml,vue,svelte,astro,graphql}": [
+      "oxfmt --config oxfmt.config.ts --no-error-on-unmatched-pattern"
     ]
   }
 }
