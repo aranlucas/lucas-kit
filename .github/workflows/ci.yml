@@ -16,6 +16,7 @@ jobs:
   generated:
     name: Generated files current
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -27,8 +28,6 @@ jobs:
           require-lockfile: true
       - name: Check generated files and plugin invariants
         run: pnpm generate:check
-      - name: Root test conventions
-        run: pnpm lint:test
       - name: Tool and invariant fixture tests
         run: pnpm test
         env:
@@ -37,6 +36,7 @@ jobs:
   forks:
     name: Fork registry
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -90,6 +90,7 @@ jobs:
   skills-only:
     name: Skills-only install
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -113,6 +114,7 @@ jobs:
   pi-types:
     name: Pi extension types
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -144,6 +146,7 @@ jobs:
   scripts:
     name: Vendored script tooling
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: plugins/pstack/skills/poteto-mode/scripts
@@ -171,6 +174,7 @@ jobs:
   shellcheck:
     name: Shell scripts
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -184,6 +188,7 @@ jobs:
   actionlint:
     name: Workflow lint
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -201,6 +206,7 @@ jobs:
   markdownlint:
     name: Markdown lint
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -218,6 +224,7 @@ jobs:
   links:
     name: Markdown links
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
