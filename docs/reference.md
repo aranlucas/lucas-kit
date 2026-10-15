@@ -4,13 +4,14 @@ Start with the [README](../README.md) for installation and your first task.
 
 ## Slash commands
 
-The package includes 61 skill directories: 37 public skills and 24 `principle-*` references. Claude Code uses `/lucas-kit:<name>`, and Pi uses `/skill:<name>`. In Codex, request a skill by name or install the [optional shortcuts](#codex) for the `/name` form below.
+The package includes 62 skill directories: 38 public skills and 24 `principle-*` references. Claude Code uses `/lucas-kit:<name>`, and Pi uses `/skill:<name>`. In Codex, request a skill by name or install the [optional shortcuts](#codex) for the `/name` form below.
 
 Find each skill's instructions in the [skills tree](../plugins/pstack/skills/).
 
 | command | use it when |
 | --- | --- |
 | `/poteto-mode` | default entry point for any non-trivial task |
+| `/be-ambitious` | deepen a task or prompt with expert methods, primary sources, and external verification while keeping its scope |
 | `/how` | walk through how a subsystem works |
 | `/why` | investigate why something was built this way (parallel multi-MCP evidence) |
 | `/architect` | settle types and module shape before writing code that crosses a function boundary |

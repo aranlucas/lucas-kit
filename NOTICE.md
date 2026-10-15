@@ -63,3 +63,7 @@ Port-authored files covered by this notice include:
 - `CHANGES.md`
 
 `LICENSE-cursor-team-kit` and `LICENSE-thermos` are copied verbatim from upstream cursor-team-kit and thermos rather than authored for this port.
+
+## Be ambitious
+
+`be-ambitious` is copied from [DannyMac180/skills](https://github.com/DannyMac180/skills/tree/main/be-ambitious), copyright (c) 2026 Dan McAteer, under the MIT license. Its [license](plugins/pstack/skills/be-ambitious/LICENSE) is included alongside the skill. The skill credits a prompt shared by Felix Rieseberg (Anthropic).
