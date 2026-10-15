@@ -1,20 +1,20 @@
+# Package updates remain manual: Dependabot documents pnpm support only through v10; this repository uses pnpm 12.
 version: 2
 updates:
-  # Pinned action SHAs go stale silently; this is what keeps them current.
-  #
-  # cooldown holds each update for 7 days after release. Without it Dependabot
-  # opens a PR the moment a version ships, which is exactly the window a
-  # compromised release is still unreported.
   - package-ecosystem: github-actions
     directory: /
-    open-pull-requests-limit: 1
-    schedule:
-      interval: weekly
     cooldown:
       default-days: 7
     commit-message:
       prefix: ci
-    groups:
-      weekly-dependencies:
-        applies-to: version-updates
-        patterns: ["*"]
+    patterns:
+      - "*"
+    multi-ecosystem-group: weekly-dependencies
+multi-ecosystem-groups:
+  weekly-dependencies:
+    schedule:
+      interval: weekly
+      day: thursday
+      time: 06:00
+      timezone: America/Los_Angeles
+    open-pull-requests-limit: 1
