@@ -35,14 +35,17 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      # No store cache: a release must not restore anything another
-      # workflow's run could have written.
-      - name: Set up Node.js and pnpm dependencies
-        uses: pnpm/setup@a0881977cd8ea73b1ed212236c99ca10dcc80cf4 # v3.1.1
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          runtime: node@24
-          require-lockfile: true
-          cache: false
+          node-version: 24
+          package-manager-cache: false
+      # Read the exact pnpm version from the manifest. No store cache is
+      # restored from another workflow's run.
+      - name: Install pnpm and locked dependencies
+        run: | # zizmor: ignore[adhoc-packages] -- exact packageManager version from the checked-out manifest
+          npm install --global --ignore-scripts "$(node -p 'require("./package.json").packageManager')"
+          pnpm install --frozen-lockfile
       - name: Check generated files and plugin invariants
         run: pnpm generate:check
       - name: Tool and invariant fixture tests
@@ -70,10 +73,13 @@ jobs:
             cat "$RUNNER_TEMP/npm-view.txt"
             exit 1
           fi
-          if gh release view "v$version" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            release=false
-          else
+          if draft=$(gh release view "v$version" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft 2>"$RUNNER_TEMP/release-view.txt"); then
+            release=$draft
+          elif grep -q 'release not found' "$RUNNER_TEMP/release-view.txt"; then
             release=true
+          else
+            cat "$RUNNER_TEMP/release-view.txt"
+            exit 1
           fi
           mkdir -p "$RUNNER_TEMP/release"
           archive=$(pnpm --silent pack:skills "$RUNNER_TEMP/release")
@@ -141,7 +147,7 @@ jobs:
       - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-path: release/${{ needs.build.outputs.archive }}
-      # Create a draft, attach the archive, then publish. With immutable
+      # Resume an existing draft after a partial failure. With immutable
       # releases enabled, publishing locks the tag and assets, so they must
       # all be in place first.
       - name: Publish the release
@@ -153,6 +159,18 @@ jobs:
           ARCHIVE: ${{ needs.build.outputs.archive }}
         run: |
           set -euo pipefail
-          gh release create "v$VERSION" "release/$ARCHIVE" \
-            --draft --target "$GITHUB_SHA" --title "$TITLE" --notes-file release/notes.md
+          if draft=$(gh release view "v$VERSION" --json isDraft --jq .isDraft 2>"$RUNNER_TEMP/release-view.txt"); then
+            if [ "$draft" != true ]; then
+              echo "v$VERSION is already published"
+              exit 0
+            fi
+          elif grep -q 'release not found' "$RUNNER_TEMP/release-view.txt"; then
+            gh release create "v$VERSION" --draft --target "$GITHUB_SHA" \
+              --title "$TITLE" --notes-file release/notes.md
+          else
+            cat "$RUNNER_TEMP/release-view.txt"
+            exit 1
+          fi
+          gh release upload "v$VERSION" "release/$ARCHIVE" --clobber
+          gh release edit "v$VERSION" --target "$GITHUB_SHA" --title "$TITLE" --notes-file release/notes.md
           gh release edit "v$VERSION" --draft=false --latest

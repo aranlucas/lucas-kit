@@ -2,6 +2,11 @@
 
 This file is the release changelog, with one `## <version> - <title>` entry per release, newest first. The Cursor-to-Claude rewrite rules live in [`tools/substitutions.json`](tools/substitutions.json), and the [sync boundary](CONTRIBUTING.md#the-sync-boundary) in `CONTRIBUTING.md` defines how a change to upstream's skill content is declared.
 
+## 1.0.16 - Publish the skills archive from CI
+
+- Publish only the skills archive so pnpm can discover the package's top-level `skills/` directory. Restore the source package's private flag to prevent publishing the development tree.
+- Stage npm releases through trusted publishing and attach an attested archive to immutable GitHub releases. Use official GitHub Actions and resume draft releases after partial failures.
+
 ## 1.0.15 - Sync pstack with cursor/plugins main
 
 - Sync `pstack`, `cursor-team-kit`, and `thermos` to `cursor/plugins` commit `99743e9c151c8537cbbf1f98bb38f34ef3368453`. The latter two components had no file changes at this revision; their pins now match the pstack sync.

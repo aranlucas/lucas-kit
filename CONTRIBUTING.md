@@ -131,7 +131,7 @@ Merging a `VERSION` change to `main` runs `.github/workflows/release.yml`, which
 1. Stages `@aranlucas/kit-skills@<version>` on npm through trusted publishing, with provenance. The job runs in the `npm` environment, needs no token, and installs nothing. Staging does not release the version. Approve it with 2FA under Staged Packages on npmjs.com, or with `npm stage approve <stage-id>`.
 2. Attests the archive and publishes the GitHub release `v<version>` on the merged commit. The release attaches the archive and uses the version's `CHANGES.md` entry as its notes.
 
-Each step is skipped when its half already exists, so re-running a partly failed release finishes it. Never run `npm publish` from the checkout: the root `package.json` is `private` because it is the development tree, not the skills package.
+Published versions and published GitHub releases are skipped, and an existing GitHub draft is resumed. If npm staging succeeded before a later failure, approve or reject the pending stage before starting a new workflow run: pending stages reserve their version but are invisible to `npm view`, and npm does not allow listing stages with OIDC. You can also rerun only the failed GitHub job to reuse the successful staging job. Never run `npm publish` from the checkout: the root `package.json` is `private` because it is the development tree, not the skills package.
 
 One-time setup before the first release:
 
