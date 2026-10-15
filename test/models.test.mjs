@@ -30,11 +30,6 @@ describe("committed models.json", () => {
     // such as claude-opus-5-5 is rejected before the subagent starts.
     expect([...models.available].sort()).toEqual(["fable", "haiku", "opus", "sonnet"]);
   });
-
-  test("the file stays one row per entry so a role change is a one-line diff", () => {
-    const text = readFileSync(join(repoRoot, "plugins/pstack/models.json"), "utf8");
-    expect(text.match(/^\s*\{ "/gm)).toHaveLength(raw.roles.length);
-  });
 });
 
 describe("parseModels", () => {

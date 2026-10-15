@@ -218,7 +218,7 @@ Skills-only installs use `plugins/pstack/skills/`. Agent references and license 
 
 The [generator](../tools/generate.mjs) updates versions, model defaults, Codex prompts, Copilot preambles and role lists, and portable reference files, and validates the Pi package manifest. The [slash-command table](#slash-commands) supplies the Codex prompt descriptions and order. Edit that table when changing a menu description, then regenerate. Keep a row for every public skill, with `poteto-mode` first.
 
-[Documentation fact tests](../test/readme-facts.test.mjs) check the skill counts and upstream pin. The table parser requires the header `| command | use it when |`.
+The table parser requires the header `| command | use it when |`.
 
 Run the generator and repository tests through pnpm with Node.js 24 and Vitest:
 

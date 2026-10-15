@@ -35,7 +35,7 @@ When a clean merge matches the new upstream text and mode, the sync reports it a
 
 Use Node.js 24 and pnpm 12.11.0 (pinned in `packageManager`) for development commands. The generator uses the `yaml` parser, and `pnpm test` runs Vitest. CI runs on Ubuntu only; native Windows/macOS behavior is no longer exercised by dedicated jobs. The vendored scripts remain a separate package with their own frozen pnpm install and test suite.
 
-The root `tsconfig.json` and pinned Node 24 declarations give type-aware Oxlint a project for the JavaScript tools, fixtures, and Pi extension. They do not replace the separate strict Pi or vendored-script checks below. `pnpm lint` still reports existing source debt; the lint-project fixture checks that Node APIs resolve without hiding unsafe JSON access. `pnpm lint:test` checks the root-owned `test/` tree with the shared Oxforge Vitest preset and rejects warnings. CI runs that bounded check before the root tests; the vendored suites retain their upstream tooling.
+The root `tsconfig.json` and pinned Node 24 declarations give type-aware Oxlint a project for the JavaScript tools, fixtures, and Pi extension. They do not replace the separate strict Pi or vendored-script checks below. `pnpm lint` still reports existing source debt. `pnpm lint:test` checks the root-owned `test/` tree with the shared Oxforge Vitest preset and rejects warnings. CI runs that bounded check before the root tests; the vendored suites retain their upstream tooling.
 
 Install the root dependencies, then run the generator and the tests:
 

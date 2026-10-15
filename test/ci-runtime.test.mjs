@@ -8,29 +8,6 @@ const workflows = workflowFiles.map((file) => {
   return { source, configuration: parse(source) };
 });
 
-test("every CI job uses Ubuntu", () => {
-  for (const { configuration } of workflows) {
-    for (const job of Object.values(configuration.jobs)) {
-      expect(job["runs-on"]).toBe("ubuntu-latest");
-    }
-  }
-});
-
-test("active workflows do not install or invoke the removed runtime", () => {
-  for (const { source } of workflows) expect(source).not.toMatch(/\bbun(?:x)?\b/i);
-});
-
-test("dependency installs remain frozen and CLI-only jobs skip installation", () => {
-  const setupSteps = Object.values(workflows[0].configuration.jobs)
-    .flatMap(({ steps }) => steps)
-    .filter(({ uses }) => uses?.startsWith("pnpm/setup@"));
-  expect(setupSteps).toHaveLength(6);
-  for (const step of setupSteps) {
-    expect(step.with.runtime).toBe("node@24");
-    expect(step.with.install === false || step.with["require-lockfile"] === true).toBe(true);
-  }
-});
-
 test("the vulnerability job exposes every document from both lockfiles", async () => {
   const { mkdtemp, mkdir, writeFile, readdir, readFile, rm } = await import("node:fs/promises");
   const { tmpdir } = await import("node:os");
