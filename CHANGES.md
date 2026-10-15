@@ -1,5 +1,12 @@
 # CHANGES
 
+## 1.0.15 - Sync pstack with cursor/plugins main
+
+- Sync `pstack`, `cursor-team-kit`, and `thermos` to `cursor/plugins` commit `99743e9c151c8537cbbf1f98bb38f34ef3368453`. The latter two components had no file changes at this revision; their pins now match the pstack sync.
+- Add `/in-your-own-words` and `/sharpen`, and refresh orchestration, verification, and session-recovery guidance from upstream while keeping the port's runtime, worktree, merge, and human-ruling policies.
+- Move `orch frontier set` from Graphite output parsing to the upstream GitHub CLI and Origin CLI PR base-chain lookup. Keep the local branch-ref SHA check, single-line status rendering, TSV escaping, and race-safe store locks.
+- Resolve all 15 pstack sync conflicts in the playbooks, poteto-mode, two principle skills, recall, `orch` store and tests, and the PR check reader. Update the sync instructions and runtime dependency notes to match the new flow.
+
 This file is the release changelog, with one `## <version> - <title>` entry per release, newest first. The Cursor-to-Claude rewrite rules live in [`tools/substitutions.json`](tools/substitutions.json), and the [sync boundary](CONTRIBUTING.md#the-sync-boundary) in `CONTRIBUTING.md` defines how a change to upstream's skill content is declared.
 
 ## 1.0.14 - Scoped skills package and pnpm tooling

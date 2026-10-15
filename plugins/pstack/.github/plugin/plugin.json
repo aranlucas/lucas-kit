@@ -1,7 +1,7 @@
 {
   "name": "lucas-kit",
   "displayName": "lucas-kit (no Copilot support)",
-  "version": "1.0.14",
+  "version": "1.0.15",
   "description": "lucas-kit runs only inside T3 Code; on GitHub Copilot install pstack@pstack-claude from michael-denyer/pstack-claude.",
   "author": {
     "name": "Lucas",
