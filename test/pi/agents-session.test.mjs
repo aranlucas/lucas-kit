@@ -227,7 +227,7 @@ describe("registry", () => {
 
   for (const [what, edit, env, status] of [
     ["is left running, untouched", (data) => data, {}, "running"],
-    ["is left running on a record an earlier version wrote, which has no start time", ({ pidStart, ...data }) => data, {}, "running"],
+    ["is left running on a record an earlier version wrote, which has no start time", ({ pidStart: _pidStart, ...data }) => data, {}, "running"],
     ["is left running when ps cannot be run", (data) => data, { PATH: "/nonexistent" }, "running"],
     ["is stopped, and that process left alone, when it started at another time than the record's", (data) => ({ ...data, pidStart: "another time" }), {}, "stopped"],
   ]) {

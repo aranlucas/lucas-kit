@@ -1305,11 +1305,14 @@ describe("syncComponent", () => {
     lstatSync(join(dir, heldAs[name] ?? name), { throwIfNoEntry: false });
   const aliasesHere = (held, asked) => existsSync(join(tree({ [held]: "" }), asked));
   const sameEntry = (asked) => `the same entry as upstream's ${asked} on this filesystem`;
-  const onAliasingFilesystems = (title, heldAs, body) => {
-    test(`${title} (a stand-in filesystem)`, () => body({ lookUp: aliasing(heldAs) }));
-    const here = Object.entries(heldAs).every(([asked, held]) => aliasesHere(held, asked));
-    test.skipIf(!here)(`${title} (this filesystem)`, () => body({}));
-  };
+  const aliasingFilesystems = (heldAs) => [
+    { name: "a stand-in filesystem", filesystem: { lookUp: aliasing(heldAs) }, available: true },
+    {
+      name: "this filesystem",
+      filesystem: {},
+      available: Object.entries(heldAs).every(([asked, held]) => aliasesHere(held, asked)),
+    },
+  ];
 
   const NFC = "caf\u00e9.md";
   const NFD = "cafe\u0301.md";
@@ -1319,39 +1322,41 @@ describe("syncComponent", () => {
     ["a sharp s", "strasse.md", "stra\u00dfe.md"],
     ["a ligature", "file.md", "\ufb01le.md"],
   ]) {
-    onAliasingFilesystems(
-      `an upstream edit to a path the filesystem resolves to a port file whose name differs by ${difference} fails the run before any write`,
-      { [asked]: held },
-      (filesystem) => {
-        const base = "l1\nl2\nl3\nl4\nl5\nl6\nl7\n";
-        const oldUp = tree({ [asked]: base, "sibling.md": "old\n" });
-        const newUp = tree({ [asked]: base.replace("l7", "l7 upstream"), "sibling.md": "new\n" });
-        const local = tree({ [held]: base.replace("l1", "l1 the port"), "sibling.md": "old\n" });
+    for (const { name, filesystem, available } of aliasingFilesystems({ [asked]: held })) {
+      test.skipIf(!available)(
+        `an upstream edit to a path the filesystem resolves to a port file whose name differs by ${difference} fails the run before any write (${name})`,
+        () => {
+          const base = "l1\nl2\nl3\nl4\nl5\nl6\nl7\n";
+          const oldUp = tree({ [asked]: base, "sibling.md": "old\n" });
+          const newUp = tree({ [asked]: base.replace("l7", "l7 upstream"), "sibling.md": "new\n" });
+          const local = tree({ [held]: base.replace("l1", "l1 the port"), "sibling.md": "old\n" });
 
-        const report = sync({ oldDir: oldUp, newDir: newUp, localDir: local, ...filesystem });
+          const report = sync({ oldDir: oldUp, newDir: newUp, localDir: local, ...filesystem });
 
-        expect(report.collisions).toEqual([{ rel: held, reason: sameEntry(asked) }]);
-        expect(readdirSync(local).sort()).toEqual([held, "sibling.md"].sort());
-        expect(readFileSync(join(local, held), "utf8")).toBe(base.replace("l1", "l1 the port"));
-        expect(readFileSync(join(local, "sibling.md"), "utf8")).toBe("old\n");
-      },
-    );
+          expect(report.collisions).toEqual([{ rel: held, reason: sameEntry(asked) }]);
+          expect(readdirSync(local).sort()).toEqual([held, "sibling.md"].sort());
+          expect(readFileSync(join(local, held), "utf8")).toBe(base.replace("l1", "l1 the port"));
+          expect(readFileSync(join(local, "sibling.md"), "utf8")).toBe("old\n");
+        },
+      );
+    }
 
-    onAliasingFilesystems(
-      `an upstream rename to a name the filesystem resolves to the old entry, differing by ${difference}, deletes nothing`,
-      { [asked]: held },
-      (filesystem) => {
-        const oldUp = tree({ [held]: "body\n", "sibling.md": "old\n" });
-        const newUp = tree({ [asked]: "body\n", "sibling.md": "new\n" });
-        const local = tree({ [held]: "body\n", "sibling.md": "old\n" });
+    for (const { name, filesystem, available } of aliasingFilesystems({ [asked]: held })) {
+      test.skipIf(!available)(
+        `an upstream rename to a name the filesystem resolves to the old entry, differing by ${difference}, deletes nothing (${name})`,
+        () => {
+          const oldUp = tree({ [held]: "body\n", "sibling.md": "old\n" });
+          const newUp = tree({ [asked]: "body\n", "sibling.md": "new\n" });
+          const local = tree({ [held]: "body\n", "sibling.md": "old\n" });
 
-        const report = sync({ oldDir: oldUp, newDir: newUp, localDir: local, ...filesystem });
+          const report = sync({ oldDir: oldUp, newDir: newUp, localDir: local, ...filesystem });
 
-        expect(report.collisions).toEqual([{ rel: held, reason: sameEntry(asked) }]);
-        expect(readdirSync(local).sort()).toEqual([held, "sibling.md"].sort());
-        expect(readFileSync(join(local, "sibling.md"), "utf8")).toBe("old\n");
-      },
-    );
+          expect(report.collisions).toEqual([{ rel: held, reason: sameEntry(asked) }]);
+          expect(readdirSync(local).sort()).toEqual([held, "sibling.md"].sort());
+          expect(readFileSync(join(local, "sibling.md"), "utf8")).toBe("old\n");
+        },
+      );
+    }
   }
 
   test.skipIf(aliasesHere("Foo.md", "foo.md"))(
@@ -1368,36 +1373,40 @@ describe("syncComponent", () => {
     },
   );
 
-  onAliasingFilesystems(
-    "a new upstream file the filesystem resolves to a port path with no outcome fails the run before any write",
-    { "kit.md": "Kit.md", "notes.md": "NOTES.md" },
-    (filesystem) => {
-      const oldUp = tree({ "a.md": "old a\n" });
-      const newUp = tree({ "a.md": "new a\n", "kit.md": "upstream\n", "notes.md": "upstream\n" });
-      const local = tree({
-        "a.md": "old a\n",
-        "Kit.md": "another component's\n",
-        "NOTES.md": "the port's own\n",
-      });
+  for (const { name, filesystem, available } of aliasingFilesystems({
+    "kit.md": "Kit.md",
+    "notes.md": "NOTES.md",
+  })) {
+    test.skipIf(!available)(
+      `a new upstream file the filesystem resolves to a port path with no outcome fails the run before any write (${name})`,
+      () => {
+        const oldUp = tree({ "a.md": "old a\n" });
+        const newUp = tree({ "a.md": "new a\n", "kit.md": "upstream\n", "notes.md": "upstream\n" });
+        const local = tree({
+          "a.md": "old a\n",
+          "Kit.md": "another component's\n",
+          "NOTES.md": "the port's own\n",
+        });
 
-      const report = sync({
-        oldDir: oldUp,
-        newDir: newUp,
-        localDir: local,
-        carriedElsewhere: ["Kit.md"],
-        exclude: ["NOTES.md"],
-        ...filesystem,
-      });
+        const report = sync({
+          oldDir: oldUp,
+          newDir: newUp,
+          localDir: local,
+          carriedElsewhere: ["Kit.md"],
+          exclude: ["NOTES.md"],
+          ...filesystem,
+        });
 
-      expect(report.collisions).toEqual([
-        { rel: "Kit.md", reason: sameEntry("kit.md") },
-        { rel: "NOTES.md", reason: sameEntry("notes.md") },
-      ]);
-      expect(readFileSync(join(local, "a.md"), "utf8")).toBe("old a\n");
-      expect(readFileSync(join(local, "Kit.md"), "utf8")).toBe("another component's\n");
-      expect(readFileSync(join(local, "NOTES.md"), "utf8")).toBe("the port's own\n");
-    },
-  );
+        expect(report.collisions).toEqual([
+          { rel: "Kit.md", reason: sameEntry("kit.md") },
+          { rel: "NOTES.md", reason: sameEntry("notes.md") },
+        ]);
+        expect(readFileSync(join(local, "a.md"), "utf8")).toBe("old a\n");
+        expect(readFileSync(join(local, "Kit.md"), "utf8")).toBe("another component's\n");
+        expect(readFileSync(join(local, "NOTES.md"), "utf8")).toBe("the port's own\n");
+      },
+    );
+  }
 
   test("a port file where upstream has a directory, or a port directory where upstream has a file, fails the run before any write", () => {
     const oldUp = tree({ "a.md": "old a\n" });
@@ -1434,42 +1443,46 @@ describe("syncComponent", () => {
     expect(readFileSync(join(local, "a.md"), "utf8")).toBe("old a\n");
   });
 
-  onAliasingFilesystems(
-    "an upstream directory the filesystem resolves to a port file fails the run before any write",
-    { b: "B" },
-    (filesystem) => {
-      const oldUp = tree({ "a.md": "old a\n" });
-      const newUp = tree({ "a.md": "new a\n", "b/new.md": "n\n" });
-      const local = tree({ "a.md": "old a\n", B: "a file in the port\n" });
+  for (const { name, filesystem, available } of aliasingFilesystems({ b: "B" })) {
+    test.skipIf(!available)(
+      `an upstream directory the filesystem resolves to a port file fails the run before any write (${name})`,
+      () => {
+        const oldUp = tree({ "a.md": "old a\n" });
+        const newUp = tree({ "a.md": "new a\n", "b/new.md": "n\n" });
+        const local = tree({ "a.md": "old a\n", B: "a file in the port\n" });
 
-      const report = sync({ oldDir: oldUp, newDir: newUp, localDir: local, ...filesystem });
+        const report = sync({ oldDir: oldUp, newDir: newUp, localDir: local, ...filesystem });
 
-      expect(report.collisions).toEqual([{ rel: "B", reason: sameEntry("b") }]);
-      expect(readFileSync(join(local, "a.md"), "utf8")).toBe("old a\n");
-      expect(readFileSync(join(local, "B"), "utf8")).toBe("a file in the port\n");
-    },
-  );
+        expect(report.collisions).toEqual([{ rel: "B", reason: sameEntry("b") }]);
+        expect(readFileSync(join(local, "a.md"), "utf8")).toBe("old a\n");
+        expect(readFileSync(join(local, "B"), "utf8")).toBe("a file in the port\n");
+      },
+    );
+  }
 
-  onAliasingFilesystems(
-    "an upstream directory the filesystem resolves to a port directory spelled another way fails the run before any write",
-    { scripts: "Scripts" },
-    (filesystem) => {
-      const oldUp = tree({ "kit/a.md": "old a\n" });
-      const newUp = tree({
-        "kit/a.md": "new a\n",
-        "kit/scripts/y.sh": "upstream y\n",
-        "kit/scripts/deep/z.sh": "upstream z\n",
-      });
-      const local = tree({ "kit/a.md": "old a\n", "kit/Scripts/x.sh": "port x\n" });
+  for (const { name, filesystem, available } of aliasingFilesystems({ scripts: "Scripts" })) {
+    test.skipIf(!available)(
+      `an upstream directory the filesystem resolves to a port directory spelled another way fails the run before any write (${name})`,
+      () => {
+        const oldUp = tree({ "kit/a.md": "old a\n" });
+        const newUp = tree({
+          "kit/a.md": "new a\n",
+          "kit/scripts/y.sh": "upstream y\n",
+          "kit/scripts/deep/z.sh": "upstream z\n",
+        });
+        const local = tree({ "kit/a.md": "old a\n", "kit/Scripts/x.sh": "port x\n" });
 
-      const report = sync({ oldDir: oldUp, newDir: newUp, localDir: local, ...filesystem });
+        const report = sync({ oldDir: oldUp, newDir: newUp, localDir: local, ...filesystem });
 
-      expect(report.collisions).toEqual([{ rel: "kit/Scripts", reason: sameEntry("kit/scripts") }]);
-      expect(readdirSync(join(local, "kit")).sort()).toEqual(["Scripts", "a.md"]);
-      expect(readdirSync(join(local, "kit/Scripts"))).toEqual(["x.sh"]);
-      expect(readFileSync(join(local, "kit/a.md"), "utf8")).toBe("old a\n");
-    },
-  );
+        expect(report.collisions).toEqual([
+          { rel: "kit/Scripts", reason: sameEntry("kit/scripts") },
+        ]);
+        expect(readdirSync(join(local, "kit")).sort()).toEqual(["Scripts", "a.md"]);
+        expect(readdirSync(join(local, "kit/Scripts"))).toEqual(["x.sh"]);
+        expect(readFileSync(join(local, "kit/a.md"), "utf8")).toBe("old a\n");
+      },
+    );
+  }
 
   test("an entry the filesystem finds and the listing cannot identify still fails the run before any write", () => {
     const oldUp = tree({ "a.md": "old a\n" });
@@ -1493,26 +1506,27 @@ describe("syncComponent", () => {
     ["a file", "file.md"],
     ["nothing", "missing"],
   ]) {
-    onAliasingFilesystems(
-      `an upstream directory the filesystem resolves to a port link to ${target} fails the run before any write`,
-      { b: "B" },
-      (filesystem) => {
-        const outside = tree({ "dir/keep.md": "k\n", "file.md": "f\n" });
-        const oldUp = tree({ "a.md": "old a\n" });
-        const newUp = tree({ "a.md": "new a\n", "b/new.md": "n\n" });
-        const local = tree({ "a.md": "old a\n" });
-        symlinkSync(join(outside, linkTo), join(local, "B"));
+    for (const { name, filesystem, available } of aliasingFilesystems({ b: "B" })) {
+      test.skipIf(!available)(
+        `an upstream directory the filesystem resolves to a port link to ${target} fails the run before any write (${name})`,
+        () => {
+          const outside = tree({ "dir/keep.md": "k\n", "file.md": "f\n" });
+          const oldUp = tree({ "a.md": "old a\n" });
+          const newUp = tree({ "a.md": "new a\n", "b/new.md": "n\n" });
+          const local = tree({ "a.md": "old a\n" });
+          symlinkSync(join(outside, linkTo), join(local, "B"));
 
-        const report = sync({ oldDir: oldUp, newDir: newUp, localDir: local, ...filesystem });
+          const report = sync({ oldDir: oldUp, newDir: newUp, localDir: local, ...filesystem });
 
-        expect(report.collisions).toEqual([{ rel: "B", reason: sameEntry("b") }]);
-        expect(readFileSync(join(local, "a.md"), "utf8")).toBe("old a\n");
-        expect(lstatSync(join(local, "B")).isSymbolicLink()).toBe(true);
-        expect(readdirSync(outside).sort()).toEqual(["dir", "file.md"]);
-        expect(readdirSync(join(outside, "dir"))).toEqual(["keep.md"]);
-        expect(readFileSync(join(outside, "file.md"), "utf8")).toBe("f\n");
-      },
-    );
+          expect(report.collisions).toEqual([{ rel: "B", reason: sameEntry("b") }]);
+          expect(readFileSync(join(local, "a.md"), "utf8")).toBe("old a\n");
+          expect(lstatSync(join(local, "B")).isSymbolicLink()).toBe(true);
+          expect(readdirSync(outside).sort()).toEqual(["dir", "file.md"]);
+          expect(readdirSync(join(outside, "dir"))).toEqual(["keep.md"]);
+          expect(readFileSync(join(outside, "file.md"), "utf8")).toBe("f\n");
+        },
+      );
+    }
   }
 
   test("a binary port copy under an upstream text edit blocks every write", () => {

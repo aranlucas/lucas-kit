@@ -21,7 +21,7 @@ test.each([null, [], true, 1, "hooks", {}, { hooks: { Start: {} } }])(
           return executable;
         },
       }),
-    ).toThrow();
+    ).toThrow(/^hooks\/hooks\.json:\n  /);
     expect(inspected).toEqual([]);
   },
 );

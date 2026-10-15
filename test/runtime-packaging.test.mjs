@@ -130,7 +130,7 @@ describe("validatePiPackage", () => {
     expect(() =>
       validatePiPackage(manifest({ ...good, skills: [] }), { pathExists: everything }),
     ).toThrow("package.json: pi.skills must list ./plugins/pstack/skills");
-    const { extensions, ...skillsOnly } = good;
+    const skillsOnly = { skills: good.skills };
     expect(() => validatePiPackage(manifest(skillsOnly), { pathExists: everything })).toThrow(
       `package.json: pi.extensions must list ./${ENTRY}`,
     );

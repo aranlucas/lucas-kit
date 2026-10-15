@@ -83,22 +83,27 @@ test.each(["null", "[]", '"policy"', "42"])("rejects a non-object policy %s", (t
 
 test.each(malformed)(
   "rejects $name before claiming a validated policy",
-  ({ replacements, error, skillLookups }) => {
+  ({ replacements, error }) => {
     /** @type {unknown} */
     const input = JSON.parse(replacedPolicy(replacements));
     expect(isModelPolicy(input)).toBe(false);
+    expect(() => parseModels(input, () => true)).toThrow(error);
+  },
+);
+
+test.each(malformed.filter(({ skillLookups }) => skillLookups !== undefined))(
+  "rejects $name before looking up skills",
+  ({ replacements, error, skillLookups }) => {
+    /** @type {unknown} */
+    const input = JSON.parse(replacedPolicy(replacements));
     let lookups = 0;
     expect(() =>
       parseModels(input, () => {
         lookups += 1;
-
         return true;
       }),
     ).toThrow(error);
-
-    if (skillLookups !== undefined) {
-      expect(lookups).toBe(skillLookups);
-    }
+    expect(lookups).toBe(skillLookups);
   },
 );
 
