@@ -509,6 +509,18 @@
       "files": "^skills/poteto-mode/playbooks/orchestrate\\.md$",
       "replacement": "State reads and writes go through `node skills/poteto-mode/scripts/orch/orch.ts` at drain points, one command in and one line out.",
       "rationale": "the installed port invokes the store CLI with Node.js from the plugin's skills directory"
+    },
+    {
+      "pattern": "A visual is a picture: a screenshot, a video, a Mermaid diagram, a chart or diagram from `/visualize`, or a generated image.",
+      "files": "^skills/ketchup/SKILL\\.md$",
+      "replacement": "A visual is a picture: a screenshot, a video, a Mermaid diagram, a chart or diagram, or a generated image.",
+      "rationale": "the upstream `/visualize` skill is not bundled by this port, so keep the guidance portable"
+    },
+    {
+      "pattern": "a Mermaid diagram for how things connect and a `/visualize` chart for numbers.",
+      "files": "^skills/ketchup/SKILL\\.md$",
+      "replacement": "Mermaid for relationships and a charting tool for numbers.",
+      "rationale": "the upstream `/visualize` skill is not bundled by this port, so keep the guidance portable"
     }
   ],
   "denylist": [
