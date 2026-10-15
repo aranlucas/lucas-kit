@@ -546,11 +546,13 @@ describe("pathSpellings", () => {
     };
 
     test.skipIf(noNode)("node holds a worktree whose only chat named it through a symlink, as bun does", () => {
+      expect.assertions(3);
       heldUnderBunAndNode((root) => symlinkSync(join(root, "real"), join(root, "alias")));
     });
 
     // node resolves `..` in a link's target before the links in it. Windows has no such route.
     test.skipIf(noNode || process.platform === "win32")("node holds a worktree whose only chat named it through a link that climbs out of another link", () => {
+      expect.assertions(3);
       heldUnderBunAndNode((root) => {
         symlinkSync(join(root, "real/worktree"), join(root, "hop"));
         symlinkSync(`${root}/hop/..`, join(root, "alias"));
@@ -559,6 +561,7 @@ describe("pathSpellings", () => {
 
     // node keeps a route through a firmlink as written.
     test.skipIf(noNode || process.platform !== "darwin")("node holds a worktree whose only chat named it through a link over macOS's data volume", () => {
+      expect.assertions(3);
       heldUnderBunAndNode((root) => symlinkSync(`/System/Volumes/Data${join(root, "real")}`, join(root, "alias")));
     });
   });
@@ -732,8 +735,14 @@ describe("a discovery failure keeps an ancestor out of safe", () => {
     expect(warnings).toHaveLength(1);
     expect(warnings[0]).toMatch(warning);
   };
-  test.each(failures)("%s", keepsAncestorOutOfSafe);
-  test.skipIf(noChmod).each(chmodFailures)("%s", keepsAncestorOutOfSafe);
+  test.each(failures)("%s", (name, inject, warning) => {
+    expect.assertions(4);
+    keepsAncestorOutOfSafe(name, inject, warning);
+  });
+  test.skipIf(noChmod).each(chmodFailures)("%s", (name, inject, warning) => {
+    expect.assertions(4);
+    keepsAncestorOutOfSafe(name, inject, warning);
+  });
 
   test("every missing transcripts directory is named", () => {
     const fixture = createFixture();
@@ -756,12 +765,14 @@ describe("the trunk comes from the remote", () => {
     test(`a non-main trunk with cached HEAD ${cachedHead}`, () => {
       const fixture = createFixture({ trunk: "release" });
       if (!cachedHead) git("-C", fixture.repo, "symbolic-ref", "--delete", "refs/remotes/origin/HEAD");
+      expect.assertions(2);
       assertAncestorSafe(fixture);
     });
   }
 
   test("a trunk the single-branch clone does not track", () => {
     const fixture = createFixture({ trunk: "release", cloneArgs: ["--single-branch", "--branch", "other"] });
+    expect.assertions(3);
     expect(git("-C", fixture.repo, "for-each-ref", "--format=%(refname)", "refs/remotes/origin/release")).toBe("");
     assertAncestorSafe(fixture);
   });
@@ -770,6 +781,7 @@ describe("the trunk comes from the remote", () => {
     const fixture = createFixture();
     git("--git-dir", fixture.remote, "symbolic-ref", "HEAD", "refs/heads/missing");
     git("-C", fixture.repo, "symbolic-ref", "--delete", "refs/remotes/origin/HEAD");
+    expect.assertions(2);
     assertAncestorSafe(fixture);
   });
 });

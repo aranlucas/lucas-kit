@@ -105,7 +105,7 @@ describe("fenced plan evidence", () => {
     ["tilde info string with a backtick", "~~~yaml `info`", "message: “code”", "~~~"],
     ["closing delimiter with trailing whitespace", "```yaml", "message: “code”", "``` \t"],
   ]) {
-    test(name, () => {
+    test(`accepts ${name} fenced evidence`, () => {
       const example = `\n${open}\n${inner}\n## Example heading\n${close}\n`;
       expect(run(skeleton + example).code).toBe(0);
       const result = run(skeleton + example + "Prose: “invalid”\n");

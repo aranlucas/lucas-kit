@@ -145,8 +145,6 @@ test("a parent session already in a linked worktree gets its own child worktree"
 // Whatever sits at a retained path, only this agent's registered linked
 // worktree may run a writer or be cleaned up.
 describe("a path that is not the agent's linked worktree", () => {
-  /** @param {() => unknown} fn */
-  const rejected = (fn) => expect(fn).toThrow(/not the expected linked worktree/);
   /**
    * @param {string} target
    * @param {string} path
@@ -172,7 +170,7 @@ describe("a path that is not the agent's linked worktree", () => {
     const wt = planWorktree(w.cwd, "id1");
     mkdirSync(wt.path, { recursive: true });
     expect(spawnSync("git", ["rev-parse", "--show-toplevel"], { cwd: wt.path, encoding: "utf8" }).stdout.trim()).toBe(w.cwd);
-    rejected(() => ensureWorktree(wt));
+    expect(() => ensureWorktree(wt)).toThrow(/not the expected linked worktree/);
   });
 
   test("an unrelated repository is rejected and left as it was", () => {
@@ -182,7 +180,7 @@ describe("a path that is not the agent's linked worktree", () => {
     mkdirSync(wt.path, { recursive: true });
     const other = gitRepo(wt.path);
     const head = other("rev-parse", "HEAD");
-    rejected(() => ensureWorktree(wt));
+    expect(() => ensureWorktree(wt)).toThrow(/not the expected linked worktree/);
     expect(other("rev-parse", "HEAD")).toBe(head);
   });
 
@@ -191,7 +189,7 @@ describe("a path that is not the agent's linked worktree", () => {
     gitRepo(w.cwd);
     const wt = planWorktree(w.cwd, "id3");
     link(w.cwd, wt.path);
-    rejected(() => ensureWorktree(wt));
+    expect(() => ensureWorktree(wt)).toThrow(/not the expected linked worktree/);
   });
 
   test("a link to another agent's worktree is rejected and that worktree survives", () => {
@@ -201,7 +199,7 @@ describe("a path that is not the agent's linked worktree", () => {
     ensureWorktree(other);
     const wt = planWorktree(w.cwd, "id4");
     link(other.path, wt.path);
-    rejected(() => ensureWorktree(wt));
+    expect(() => ensureWorktree(wt)).toThrow(/not the expected linked worktree/);
     expect(existsSync(other.path)).toBe(true);
   });
 
@@ -211,7 +209,7 @@ describe("a path that is not the agent's linked worktree", () => {
     const wt = planWorktree(w.cwd, "id5");
     mkdirSync(wt.path, { recursive: true });
     writeFileSync(join(wt.path, ".git"), `gitdir: ${join(w.cwd, ".git").replaceAll("\\", "/")}\n`);
-    rejected(() => ensureWorktree(wt));
+    expect(() => ensureWorktree(wt)).toThrow(/not the expected linked worktree/);
   });
 
   test("a removed worktree replaced by a plain directory cannot be resumed, and its files stay", () => {
@@ -219,7 +217,7 @@ describe("a path that is not the agent's linked worktree", () => {
     const git = gitRepo(w.cwd);
     const wt = planWorktree(w.cwd, "id6");
     replaced(git, wt);
-    rejected(() => ensureWorktree(wt));
+    expect(() => ensureWorktree(wt)).toThrow(/not the expected linked worktree/);
     expect(readFileSync(join(wt.path, "keep.txt"), "utf8")).toBe("do not remove\n");
   });
 
@@ -228,7 +226,7 @@ describe("a path that is not the agent's linked worktree", () => {
     const git = gitRepo(w.cwd);
     const wt = planWorktree(w.cwd, "id7");
     replaced(git, wt);
-    rejected(() => settleWorktree(wt));
+    expect(() => settleWorktree(wt)).toThrow(/not the expected linked worktree/);
     expect(readFileSync(join(wt.path, "keep.txt"), "utf8")).toBe("do not remove\n");
     expect(git("branch", "--list", wt.branch)).toContain(wt.branch);
   });

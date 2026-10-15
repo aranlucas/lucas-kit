@@ -104,7 +104,7 @@ describe("SessionStart hook", () => {
     // be a valid Copilot sheet, so every case that injects gets setup's note.
     const wrap = runtime.startsWith("copilot") ? (out) => context(out, ["sheet invalid", setupNote]) : (out) => out;
     const expected = (off) => (off ? "" : mandate);
-    describe(runtime, () => {
+    describe(`runtime ${runtime}`, () => {
       test("injects the mandate when no sheet exists", () => {
         const r = runHook(runtime, null);
         expect({ ...r, out: wrap(r.out) }).toEqual({ status: 0, out: expected(false), err: "" });

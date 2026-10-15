@@ -49,8 +49,9 @@ const skillText = markdownFiles(skillsDir)
 describe("copilot-tools.md coverage", () => {
   for (const [term, row] of TERMS) {
     const users = skillText.filter(([, text]) => text.includes(term)).map(([rel]) => rel);
+    if (users.length === 0) continue;
     test(`${term} (${users.length} files) has a Copilot mapping`, () => {
-      if (users.length) expect(mapping).toContain(row);
+      expect(mapping).toContain(row);
     });
   }
 
@@ -92,10 +93,13 @@ describe("Copilot preambles", () => {
     assert.exists(codexPreamble);
     const stamped = [...leads].filter(([, lines]) => lines.includes(copilotPreamble));
     expect(stamped.length).toBeGreaterThan(0);
-    for (const [file, lines] of stamped) {
+    for (const [file] of stamped) {
       const text = readFileSync(join(repoRoot, file), "utf8");
       expect(text).toContain(copilotPreamble);
-      if (lines.includes(codexPreamble)) expect(text).toContain(`${codexPreamble}\n\n${copilotPreamble}\n`);
+    }
+    for (const [file] of stamped.filter(([, lines]) => lines.includes(codexPreamble))) {
+      const text = readFileSync(join(repoRoot, file), "utf8");
+      expect(text).toContain(`${codexPreamble}\n\n${copilotPreamble}\n`);
     }
   });
 

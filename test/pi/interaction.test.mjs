@@ -281,7 +281,10 @@ describe("schedule_wakeup", () => {
     const { pi, ctx } = setup({ ctx: { idle: () => idle } });
     await wake(pi, ctx, { delaySeconds: 60, prompt: "old" });
     vi.advanceTimersByTime(60_000);
-    if (action === "cancel") expect((await wake(pi, ctx, { stop: true })).details.cancelled).toBe(true);
+    /** @type {unknown} */
+    let cancelled;
+    if (action === "cancel") cancelled = (await wake(pi, ctx, { stop: true })).details.cancelled;
+    expect(cancelled).toBe(action === "cancel" ? true : undefined);
     if (action === "replace") await wake(pi, ctx, { delaySeconds: 60, prompt: "new" });
     if (action === "shutdown") await pi.emit("session_shutdown", { reason: "quit" }, ctx);
     idle = true;

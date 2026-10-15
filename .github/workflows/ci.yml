@@ -27,6 +27,8 @@ jobs:
           require-lockfile: true
       - name: Check generated files and plugin invariants
         run: pnpm generate:check
+      - name: Root test conventions
+        run: pnpm lint:test
       - name: Tool and invariant fixture tests
         run: pnpm test
         env:

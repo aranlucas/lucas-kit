@@ -35,13 +35,14 @@
     "generate": "node tools/generate.mjs",
     "generate:check": "node tools/generate.mjs --check",
     "sync": "node tools/sync.mjs",
-    "test": "vitest run",
+    "test": "pnpm lint:test && vitest run",
     "test:pnpm": "vitest run test/pnpm-skills.test.mjs",
     "typecheck:pi": "node tools/typecheck-pi.mjs",
-    "lint": "oxlint",
+    "lint": "oxlint && pnpm lint:test",
     "lint:fix": "oxlint --fix",
     "format": "oxfmt --write",
-    "format:check": "oxfmt --check"
+    "format:check": "oxfmt --check",
+    "lint:test": "oxlint --config node_modules/@aranlucas/oxforge/configs/vitest.json test --deny-warnings"
   },
   "devDependencies": {
     "@aranlucas/oxforge": "0.2.2",

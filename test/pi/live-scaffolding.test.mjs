@@ -305,11 +305,11 @@ describe("session path scaffolding", () => {
     mkdirSync(nested);
     writeFileSync(join(root, "prefix_target.jsonl.bak"), "");
     writeFileSync(join(root, "prefix_not-target.jsonl"), "");
-    expect(() => findSessionFile(root, "target")).toThrow();
+    expect(() => findSessionFile(root, "target")).toThrow("to have a length of 1 but got +0");
     const target = join(nested, "prefix_target.jsonl");
     writeFileSync(target, "");
     expect(findSessionFile(root, "target")).toBe(target);
     writeFileSync(join(root, "second_target.jsonl"), "");
-    expect(() => findSessionFile(root, "target")).toThrow();
+    expect(() => findSessionFile(root, "target")).toThrow("to have a length of 1 but got 2");
   });
 });
