@@ -126,6 +126,18 @@ Plugin auto-update installs **by version number**, not by tracking `main`. A ski
 
 So: any PR that changes skill behavior either bumps the version itself or is followed by a release PR that does. The bump is three steps: edit the root `VERSION` file, add a `CHANGES.md` entry under a `## <version>` heading describing what changed and why, and run `pnpm generate` to stamp the manifests. Forgetting any of the three fails CI. Run the full invariant script (including the behavioral leg) before merging.
 
+Merging a `VERSION` change to `main` runs `.github/workflows/release.yml`, which you can also start by hand from the Actions tab. It reruns the generated-file check and the tests, builds the archive with `pnpm pack:skills`, and then:
+
+1. Stages `@aranlucas/kit-skills@<version>` on npm using `pnpm stage publish` through trusted publishing, with provenance. The job runs in the `npm` environment, needs no token, and installs no project dependencies. Staging does not release the version. Approve it with 2FA under Staged Packages on npmjs.com, or with `pnpm stage approve <stage-id>`.
+2. Attests the archive and publishes the GitHub release `v<version>` on the merged commit. The release attaches the archive and uses the version's `CHANGES.md` entry as its notes.
+
+Published versions and published GitHub releases are skipped, and an existing GitHub draft is resumed. If npm staging succeeded before a later failure, approve or reject the pending stage before starting a new workflow run: pending stages reserve their version but are invisible to `pnpm view`, and npm does not allow listing stages with OIDC. You can also rerun only the failed GitHub job to reuse the successful staging job. Never run `pnpm publish` from the checkout: the root `package.json` is `private` because it is the development tree, not the skills package.
+
+One-time setup before the first release:
+
+- On npmjs.com, add a trusted publisher for the package. Use repository `aranlucas/lucas-kit`, workflow `release.yml`, and environment `npm`, and allow `npm stage publish` only: `npm trust github @aranlucas/kit-skills --repo aranlucas/lucas-kit --file release.yml --env npm --allow-stage-publish`. Then require 2FA and disallow tokens under the package's publishing access.
+- In the repository settings, enable immutable releases, and limit the `npm` environment's deployment branches to `main`.
+
 ## Commit and PR style
 
 - Explain what changed and why. The diff already shows how.

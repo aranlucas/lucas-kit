@@ -1,6 +1,7 @@
 {
   "name": "@aranlucas/kit-skills",
-  "version": "1.0.15",
+  "version": "1.0.16",
+  "private": true,
   "description": "Lucas Kit agent workflows for T3 Code, with shared skills and optional plugin integrations.",
   "keywords": [
     "pi-package",
