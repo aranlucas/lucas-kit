@@ -4,9 +4,9 @@ Researched 2026-10-15 for [PR #17](https://github.com/aranlucas/lucas-kit/pull/1
 
 ## Recommended actions and commands
 
-Use `actions/setup-node` to install Node, then install the exact pnpm version from `package.json` with npm and run `pnpm install --frozen-lockfile`. `setup-node` supports pnpm caching but requires the package manager to be installed separately; set `package-manager-cache: false` for release jobs. This keeps all `uses:` dependencies under GitHub's `actions` organization. [setup-node documentation](https://github.com/actions/setup-node)
+Use the upstream-maintained `pnpm/setup` action for pnpm and Node, following the user's preference for pnpm. Keep GitHub's official checkout, artifact, and attestation actions. If only GitHub-maintained actions are desired, `actions/setup-node` installs Node but requires pnpm to be installed separately. [pnpm setup](https://github.com/pnpm/setup), [setup-node documentation](https://github.com/actions/setup-node)
 
-Installing pnpm using `npm install --global pnpm@12.11.0` is supported by pnpm's installation documentation. Reading that exact version from `packageManager` avoids maintaining a second version in the workflow. [pnpm installation](https://pnpm.io/installation)
+The build reads the exact pnpm version from `packageManager`. Its output supplies the same version to the isolated publishing job, where `install: false` skips project dependencies. [pnpm setup inputs](https://github.com/pnpm/setup/blob/a0881977cd8ea73b1ed212236c99ca10dcc80cf4/action.yml)
 
 `pnpm/setup` is maintained by pnpm, and its current integration installs both pnpm and Node and automatically installs project dependencies. It is a valid upstream action, but is not a GitHub-maintained action. Its current implementation also caches a lockfile verification record independently of `cache: false`, so the existing workflow's comment that it restores no cache is too broad. [pnpm setup](https://github.com/pnpm/setup), [pnpm CI instructions](https://pnpm.io/continuous-integration)
 
@@ -19,6 +19,8 @@ Current `gh release create TAG ASSET --target SHA --title TITLE --notes-file FIL
 Trusted publishing supports GitHub-hosted runners and requires Node >=22.14.0, npm >=11.5.1, and `id-token: write`. Match the npm trusted publisher to user `aranlucas`, repository `lucas-kit`, workflow filename `release.yml`, and environment `npm`. Repository metadata in the published package must match. New trusted publisher connections expire if no successful publish occurs within two days. New connections allow staging; older connections may require stage permission to be enabled explicitly. OIDC provenance is generated automatically for public packages from public repositories. [npm trusted publishing](https://docs.npmjs.com/trusted-publishers/)
 
 `npm stage publish` requires npm >=11.15.0 and Node >=22.14.0. Staging leaves the version unavailable to consumers until a maintainer approves it with 2FA using npm's Staged Packages page or `npm stage approve`. CI can stage with OIDC, but cannot complete the human approval step. [npm staged publishing](https://docs.npmjs.com/staged-publishing/)
+
+pnpm has its own `stage publish` command, introduced in v11.3.0, and accepts a prebuilt tarball. pnpm publishes natively rather than delegating to npm and automatically attaches provenance for public packages under trusted publishing. The selected workflow uses `pnpm stage publish` with the pinned pnpm 12 version; npm CLI staging is unnecessary. [pnpm stage](https://pnpm.io/cli/stage), [pnpm publish](https://pnpm.io/cli/publish)
 
 A pending staged version reserves its version number. Publishing or staging the same version again fails; a retry must account for pending stages rather than treating public `npm view` returning 404 as proof that no stage exists. `npm stage publish` accepts a package spec, including the packed tarball, and respects `private: true`. [npm stage command](https://docs.npmjs.com/cli/v11/commands/npm-stage/)
 
