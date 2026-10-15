@@ -1,0 +1,158 @@
+name: Release
+
+# A merged VERSION bump releases that version. The source package.json is
+# private; only the staged archive from `pnpm pack:skills` reaches npm, so a
+# publish from the repository root cannot ship the development tree.
+on:
+  push:
+    branches: [main]
+    paths: [VERSION]
+  workflow_dispatch:
+
+permissions: {}
+
+# Two releases racing would both see the version as unpublished.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build skills package
+    # A manual run from another branch would release unmerged work.
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read # check out the release commit
+    outputs:
+      version: ${{ steps.plan.outputs.version }}
+      title: ${{ steps.plan.outputs.title }}
+      archive: ${{ steps.plan.outputs.archive }}
+      stage: ${{ steps.plan.outputs.stage }}
+      release: ${{ steps.plan.outputs.release }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # No store cache: a release must not restore anything another
+      # workflow's run could have written.
+      - name: Set up Node.js and pnpm dependencies
+        uses: pnpm/setup@a0881977cd8ea73b1ed212236c99ca10dcc80cf4 # v3.1.1
+        with:
+          runtime: node@24
+          require-lockfile: true
+          cache: false
+      - name: Check generated files and plugin invariants
+        run: pnpm generate:check
+      - name: Tool and invariant fixture tests
+        run: pnpm test
+        env:
+          PSTACK_REQUIRE_PNPM_SKILLS: "1"
+      # Each later job runs only when its half is missing, so re-running the
+      # workflow after a partial failure finishes the release instead of
+      # failing on the half that already exists. A version that is staged but
+      # not yet approved reads as unpublished; the stage step then fails on
+      # the duplicate, and the pending stage needs approving or rejecting.
+      - name: Plan the release
+        id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version=$(cat VERSION)
+          name=$(jq -r .name package.json)
+          if npm view "$name@$version" version >/dev/null 2>"$RUNNER_TEMP/npm-view.txt"; then
+            stage=false
+          elif grep -q E404 "$RUNNER_TEMP/npm-view.txt"; then
+            stage=true
+          else
+            cat "$RUNNER_TEMP/npm-view.txt"
+            exit 1
+          fi
+          if gh release view "v$version" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            release=false
+          else
+            release=true
+          fi
+          mkdir -p "$RUNNER_TEMP/release"
+          archive=$(pnpm --silent pack:skills "$RUNNER_TEMP/release")
+          title=$(node tools/release-notes.mjs "$version" "$RUNNER_TEMP/release/notes.md")
+          {
+            echo "version=$version"
+            echo "title=$title"
+            echo "archive=$(basename "$archive")"
+            echo "stage=$stage"
+            echo "release=$release"
+          } >> "$GITHUB_OUTPUT"
+          echo "$name@$version: stage on npm=$stage, create GitHub release=$release"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release
+          path: ${{ runner.temp }}/release
+          if-no-files-found: error
+          retention-days: 7
+
+  npm:
+    name: Stage on npm
+    needs: build
+    if: needs.build.outputs.stage == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Trusted publishing matches this workflow file and environment. The job
+    # checks out nothing and installs nothing, so the OIDC token is never
+    # reachable from dependency code.
+    environment: npm
+    permissions:
+      id-token: write # npm trusted publishing and provenance
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release
+          path: release
+      # Node 24 bundles npm 11.19, past the 11.15 that added `npm stage`.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+      # Staging uploads the version without releasing it. A maintainer
+      # approves it with 2FA on npmjs.com or with `npm stage approve`.
+      - name: Stage the package
+        env:
+          ARCHIVE: ${{ needs.build.outputs.archive }}
+        run: npm stage publish "release/$ARCHIVE" --access public
+
+  github:
+    name: GitHub release
+    needs: [build, npm]
+    if: ${{ !cancelled() && needs.build.result == 'success' && needs.build.outputs.release == 'true' && (needs.npm.result == 'success' || needs.npm.result == 'skipped') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write # create the tag and release
+      id-token: write # sign the build provenance attestation
+      attestations: write # store the attestation
+      artifact-metadata: write # record the attested archive
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release
+          path: release
+      - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: release/${{ needs.build.outputs.archive }}
+      # Create a draft, attach the archive, then publish. With immutable
+      # releases enabled, publishing locks the tag and assets, so they must
+      # all be in place first.
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ needs.build.outputs.version }}
+          TITLE: ${{ needs.build.outputs.title }}
+          ARCHIVE: ${{ needs.build.outputs.archive }}
+        run: |
+          set -euo pipefail
+          gh release create "v$VERSION" "release/$ARCHIVE" \
+            --draft --target "$GITHUB_SHA" --title "$TITLE" --notes-file release/notes.md
+          gh release edit "v$VERSION" --draft=false --latest
