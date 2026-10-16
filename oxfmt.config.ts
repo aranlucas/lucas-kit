@@ -1,10 +1,4 @@
-import type { OxfmtConfig } from "oxfmt";
-import base from "@aranlucas/oxforge/format-config";
+import { format } from "@aranlucas/oxforge/format";
 
-const config: OxfmtConfig = {
-  ...base,
-  // Keyword ordering is shared with generated plugin and marketplace manifests.
-  sortPackageJson: false,
-};
-
-export default config;
+// Keyword ordering is shared with generated plugin and marketplace manifests.
+export default format({ sortPackageJson: false });
