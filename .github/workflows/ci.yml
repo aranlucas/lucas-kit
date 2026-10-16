@@ -124,16 +124,21 @@ jobs:
         with:
           runtime: node@24
           require-lockfile: true
-      # The extension's types and model catalog come from the installed Pi
-      # package, so the checks run against the release users have rather than
-      # a copy in pnpm-lock.yaml. No lockfile: the exact version is pinned, and
-      # --before holds Pi's dependencies to the versions published by that
-      # date, since Pi releases after 1.0.0 ship no npm-shrinkwrap.json. Move
-      # the date with the version. The job has read-only permissions and no
-      # secrets. A lockfile here would put Pi's whole dependency tree under
-      # this repository's dependency scans.
+      # Test the pinned Pi release outside the project dependency graph.
+      # Convert the publication cutoff to pnpm's minimum release age. Add
+      # five minutes and bound resolution by that duration so its cutoff
+      # cannot advance past the original date while the install runs.
       - name: Install Pi
-        run: npm install -g --ignore-scripts --before=2026-10-11 @earendil-works/pi-coding-agent@1.1.0 # zizmor: ignore[adhoc-packages]
+        run: |
+          mkdir -p "$RUNNER_TEMP/pi"
+          release_age=$(node -e 'console.log(Math.ceil((Date.now() - Date.parse("2026-10-11T00:00:00Z")) / 60000) + 5)')
+          timeout 5m pnpm --dir "$RUNNER_TEMP/pi" add --ignore-scripts \
+            --config.node-linker=hoisted \
+            --config.minimum-release-age="$release_age" \
+            --config.minimum-release-age-strict=true \
+            --config.minimum-release-age-ignore-missing-time=false \
+            @earendil-works/pi-coding-agent@1.1.0 # zizmor: ignore[adhoc-packages]
+          echo "PI_PACKAGE_DIR=$RUNNER_TEMP/pi/node_modules/@earendil-works/pi-coding-agent" >> "$GITHUB_ENV"
       - name: Typecheck the extension against Pi
         run: pnpm typecheck:pi
       # These checks make no model calls. Missing Pi fails instead of skipping.
