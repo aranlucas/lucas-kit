@@ -5,13 +5,13 @@ updates:
     directory: /
     cooldown:
       default-days: 7
-    commit-message:
-      prefix: ci
     patterns:
       - "*"
     multi-ecosystem-group: weekly-dependencies
 multi-ecosystem-groups:
   weekly-dependencies:
+    commit-message:
+      prefix: ci
     schedule:
       interval: weekly
       day: thursday
