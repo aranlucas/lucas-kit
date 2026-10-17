@@ -16,7 +16,9 @@ export const codeList = (models) => models.map(code).join(", ");
 export function isMain(moduleUrl) {
   if (!process.argv[1]) return false;
   try {
-    // Node resolves the main module's symbolic links before setting import.meta.url.
+    // --preserve-symlinks-main keeps the lexical main path in import.meta.url.
+    if (pathToFileURL(process.argv[1]).href === moduleUrl) return true;
+    // Otherwise Node resolves the main module's symbolic links.
     return pathToFileURL(realpathSync(process.argv[1])).href === moduleUrl;
   } catch {
     return false;
