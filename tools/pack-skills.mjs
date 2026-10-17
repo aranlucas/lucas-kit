@@ -6,8 +6,9 @@ import { gzipSync, gunzipSync } from "node:zlib";
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join, relative, resolve } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 import { validateProsePaths, validateSkillsTree, walk } from "./validate-skills.mjs";
+import { isMain } from "./plugin.mjs";
 import { runPnpm } from "./pnpm.mjs";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
@@ -74,7 +75,7 @@ export function packSkills(root = repoRoot, destination = join(root, "dist")) {
   }
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (isMain(import.meta.url)) {
   if (process.argv.length > 3) {
     console.error("usage: node tools/pack-skills.mjs [output-directory]");
     process.exitCode = 2;

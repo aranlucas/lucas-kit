@@ -70,6 +70,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { isMain } from "./plugin.mjs";
 import { deriveSkill, loadLeadLines, loadModels } from "./generate.mjs";
 import { walk } from "./validate-skills.mjs";
 
@@ -905,6 +906,6 @@ function main() {
   }
 }
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
+if (isMain(import.meta.url)) {
   main();
 }
