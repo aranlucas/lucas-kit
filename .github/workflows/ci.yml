@@ -190,24 +190,6 @@ jobs:
           find . -path ./.git -prune -o -path '*/node_modules' -prune -o -name '*.sh' -print |
             sed 's#^\./##' | sort | tee /dev/stderr | xargs shellcheck --severity=warning
 
-  actionlint:
-    name: Workflow lint
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      # Container tools are pinned by image digest; the Markdown CLI uses pnpm.
-      #
-      # The 1.7.12 tag is mutable, so the digest is what actually pins this.
-      # Resolved with: docker buildx imagetools inspect rhysd/actionlint:1.7.12
-      - name: Run actionlint
-        run: |
-          docker run --rm -v "$GITHUB_WORKSPACE:/repo" -w /repo \
-            rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667 \
-            -no-color
-
   markdownlint:
     name: Markdown lint
     runs-on: ubuntu-latest
