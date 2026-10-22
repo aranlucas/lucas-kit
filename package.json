@@ -39,15 +39,17 @@
     "test": "pnpm lint:test && vitest run",
     "test:pnpm": "vitest run test/pnpm-skills.test.mjs",
     "typecheck:pi": "node tools/typecheck-pi.mjs",
-    "lint": "oxlint && pnpm lint:test",
-    "lint:fix": "oxlint --fix",
+    "lint": "oxlint --config .oxlintrc.json && pnpm lint:test",
+    "lint:fix": "oxlint --config .oxlintrc.json --fix",
     "format": "oxfmt --write",
     "format:check": "oxfmt --check",
     "lint:test": "oxlint --config node_modules/@aranlucas/oxforge/configs/vitest.json test --deny-warnings",
-    "prepare": "husky"
+    "prepare": "husky",
+    "lint:runtime": "oxlint --config .oxlintrc.json plugins/pstack/pi tools/pi-package.mjs tools/typecheck-pi.mjs test/pi/harness.mjs test/pi/host.mjs test/pi/agents-session.test.mjs plugins/pstack/skills/poteto-mode/scripts/worktree-audit.mjs"
   },
   "devDependencies": {
     "@aranlucas/oxforge": "0.2.2",
+    "@earendil-works/pi-coding-agent": "1.1.0",
     "@types/node": "26.6.5",
     "husky": "^9.1.7",
     "lint-staged": "^17.6.0",

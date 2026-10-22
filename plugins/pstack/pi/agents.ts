@@ -26,6 +26,12 @@ import {
   worktreeSchema,
 } from "./worktree.ts";
 
+type ProcessIdentity = { parentPid: number; start: string };
+
+type UnownedAgentKind = { kind: "remote" | "unverified" | "interrupted" };
+
+type SendResult = { record: AgentRecord; running: boolean };
+
 const ENTRY_TYPE = "pstack-agents";
 // Claude Code lets agents nest three layers below the main session and withholds
 // the Agent tool at the third.
@@ -178,7 +184,7 @@ function childArgs(identity: AgentIdentity, depth: number): string[] {
 // wall clock there, so a clock change moves it, and ps is asked only where
 // /proc is missing, with the locale and time zone pinned so the text is the
 // same on every read.
-function inspect(pid: number): { parentPid: number; start: string } | undefined {
+function inspect(pid: number): ProcessIdentity | undefined {
   let stat = "";
   try {
     stat = readFileSync(`/proc/${pid}/stat`, "utf8");
@@ -230,12 +236,16 @@ export class AgentRunner {
   // start a child nothing stops.
   private closed = false;
 
-  constructor(
-    private readonly pi: ExtensionAPI,
-    private readonly settings: Settings,
-  ) {}
+  private readonly pi: ExtensionAPI;
+  private readonly settings: Settings;
+
+  constructor(pi: ExtensionAPI, settings: Settings) {
+    this.pi = pi;
+    this.settings = settings;
+  }
 
   start(params: AgentParams, ctx: ExtensionContext): RunningRecord {
+    // oxlint-disable-next-line typescript/prefer-nullish-coalescing -- Empty strings intentionally select the default; nullish coalescing would retain them.
     const type = params.subagent_type || GENERAL_PURPOSE;
     const types = loadAgentTypes(this.settings);
     const def = types.get(type);
@@ -264,7 +274,7 @@ export class AgentRunner {
       model,
       // Claude Code subagents without an effort run at the session's effort.
       thinking: def.effort ?? this.pi.getThinkingLevel(),
-      readonly: params.readonly || undefined,
+      readonly: params.readonly === true ? true : undefined,
       sessionId: randomUUID(),
       sessionDir,
       systemPromptFile,
@@ -364,9 +374,11 @@ export class AgentRunner {
   }
 
   // The end of the agent's run in flight, or its record when it has ended.
-  async wait(id: string): Promise<EndedRecord> {
-    const state = this.owned(id);
-    return state.kind === "local" ? state.run.done : state.record;
+  wait(id: string): Promise<EndedRecord> {
+    return Promise.try(() => {
+      const state = this.owned(id);
+      return state.kind === "local" ? state.run.done : state.record;
+    });
   }
 
   private locals(): LocalAgent[] {
@@ -400,9 +412,7 @@ export class AgentRunner {
 
   // An agent this process can act on. One running under another pi process is
   // not: only that process holds its stdin and can message or stop it.
-  private owned(
-    to: string,
-  ): Exclude<AgentState, { kind: "remote" | "unverified" | "interrupted" }> {
+  private owned(to: string): Exclude<AgentState, UnownedAgentKind> {
     const state = this.find(to);
     if (state.kind === "remote") {
       throw new Error(
@@ -411,7 +421,7 @@ export class AgentRunner {
     }
     if (state.kind === "unverified" || state.kind === "interrupted") {
       throw new Error(
-        `Agent ${state.record.agent.id}'s previous process (pid ${state.record.pid}) has not exited; it cannot resume or be stopped here until its exit is confirmed.`,
+        `Agent ${state.record.agent.id}'s previous process (pid ${String(state.record.pid)}) has not exited; it cannot resume or be stopped here until its exit is confirmed.`,
       );
     }
     return state;
@@ -420,16 +430,20 @@ export class AgentRunner {
   // A running agent takes the message as a steer, after its current tool calls.
   // A finished one, or one that has settled and is exiting, resumes with it,
   // including one that settled just before the steer reached it.
-  async send(to: string, message: string): Promise<{ record: AgentRecord; running: boolean }> {
+  async send(to: string, message: string): Promise<SendResult> {
     const { id } = this.owned(to).record.agent;
     // Another send may have launched a run while this one awaited, so the state
     // is read again after every wait and the launch follows the last read.
     for (let state = this.agents.get(id); state?.kind === "local"; state = this.agents.get(id)) {
       const { run } = state;
+      // oxlint-disable-next-line eslint/no-await-in-loop -- Re-read the agent state only after its steer or current run has settled.
       const { response, taken } = await run.child.steer(message);
       if (taken) return { record: this.find(id).record, running: true };
       if (response && !response.success)
-        throw new Error(`Agent ${id} did not take the message: ${response.error}`);
+        throw new Error(
+          `Agent ${id} did not take the message: ${response.error ?? "unknown error"}`,
+        );
+      // oxlint-disable-next-line eslint/no-await-in-loop -- Re-read the agent state only after its steer or current run has settled.
       await run.done;
       if (run.ending)
         throw new Error(
@@ -439,14 +453,17 @@ export class AgentRunner {
     return { record: this.launch(this.find(id).record.agent, message, true), running: false };
   }
 
-  async stop(to: string, ending: NonNullable<Run["ending"]> = "stopped"): Promise<EndedRecord> {
-    const state = this.owned(to);
-    if (state.kind === "ended") return state.record;
-    const { run } = state;
-    if (run.ending !== "teardown") run.ending = ending;
-    void run.child.command({ type: "abort" });
-    run.child.end(this.settings.killGraceMs);
-    return run.done;
+  stop(to: string, ending: NonNullable<Run["ending"]> = "stopped"): Promise<EndedRecord> {
+    return Promise.try(() => {
+      const state = this.owned(to);
+      if (state.kind === "ended") return state.record;
+      const { run } = state;
+      if (run.ending !== "teardown") run.ending = ending;
+      // Abort is best effort: end() below enforces termination even without an RPC response.
+      void run.child.command({ type: "abort" }).catch(() => {});
+      run.child.end(this.settings.killGraceMs);
+      return run.done;
+    });
   }
 
   async stopAll(): Promise<void> {
@@ -484,6 +501,8 @@ export class AgentRunner {
       };
       this.agents.set(record.agent.id, restored);
       if (restored.kind === "interrupted") {
+        // reapOrphan only resolves after best-effort signals; inspection runs again on the next read.
+        // oxlint-disable-next-line typescript/no-floating-promises, promise/always-return -- The continuation only updates registry state; reads must stay synchronous.
         void reapOrphan(record, this.settings.killGraceMs).then(() => {
           if (this.agents.get(record.agent.id) === restored) {
             this.agents.set(record.agent.id, { kind: "unverified", record });

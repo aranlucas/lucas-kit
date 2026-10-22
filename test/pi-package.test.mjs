@@ -1,7 +1,7 @@
 // The compiler options the Pi typecheck derives from where Pi is installed.
 import { expect, test } from "vitest";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join, resolve } from "node:path";
 
@@ -53,6 +53,26 @@ test("piDependency picks the copy nested under Pi over one beside it, as Node do
 });
 
 const PI = join("@earendil-works", "pi-coding-agent");
+
+test("piDependency follows pnpm's package symlink to its dependency directory", () => {
+  const root = mkdtempSync(join(tmpdir(), "pstack-pi-pnpm-"));
+  try {
+    const modules = join(root, "node_modules", ".pnpm", "pi@1.1.0", "node_modules");
+    const actual = join(modules, PI);
+    const dependency = join(modules, "@earendil-works", "pi-ai");
+    const linked = join(root, "node_modules", PI);
+    mkdirSync(actual, { recursive: true });
+    mkdirSync(dependency, { recursive: true });
+    mkdirSync(dirname(linked), { recursive: true });
+    symlinkSync(actual, linked, "junction");
+    expect(piDependency(linked, "@earendil-works/pi-ai")).not.toBeNull();
+    expect(existsSync(piDependency(linked, "@earendil-works/pi-ai"))).toBe(true);
+    expect(piDependency(linked, "missing-package")).toBeNull();
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 const PI_PACKAGE_MODULE = resolve(import.meta.dirname, "../tools/pi-package.mjs");
 
 // Run package discovery in a fresh process with HOME, npm, brew, and legacy

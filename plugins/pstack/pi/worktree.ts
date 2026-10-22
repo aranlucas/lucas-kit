@@ -3,14 +3,24 @@ import { existsSync, lstatSync, realpathSync } from "node:fs";
 import { join } from "node:path";
 import { type Static, Type } from "typebox";
 
-export const worktreeSchema = Type.Object({ repo: Type.String(), path: Type.String(), branch: Type.String(), base: Type.String() });
+export const worktreeSchema = Type.Object({
+  repo: Type.String(),
+  path: Type.String(),
+  branch: Type.String(),
+  base: Type.String(),
+});
 export type Worktree = Static<typeof worktreeSchema>;
 
 // The error message ends up in an agent's final text, so it stays short. The
 // buffer is sized for a long reflog, which the default 1 MB is not.
 function git(cwd: string, args: string[], input?: string): string {
   const r = spawnSync("git", args, { cwd, encoding: "utf8", input, maxBuffer: 256 * 1024 * 1024 });
-  if (r.status !== 0) throw new Error(`git ${args.join(" ").slice(0, 200)} failed: ${(r.stderr || r.error?.message || "").trim().slice(0, 1000)}`);
+  if (r.status !== 0) {
+    const stderr = r.stderr;
+    // oxlint-disable-next-line typescript/prefer-nullish-coalescing -- Empty stderr must fall back to the spawn error message.
+    const detail = (stderr || r.error?.message || "").trim().slice(0, 1000);
+    throw new Error(`git ${args.join(" ").slice(0, 200)} failed: ${detail}`);
+  }
   return r.stdout.trim();
 }
 
@@ -30,17 +40,24 @@ function assertWorktree(wt: Worktree): void {
   const invalid = () => new Error(`not the expected linked worktree: ${wt.path.slice(0, 200)}`);
   if (!lstatSync(wt.path).isDirectory()) throw invalid();
   const root = realpathSync(wt.path);
-  if (root === realpathSync(wt.repo) || root !== realpathSync(git(wt.path, ["rev-parse", "--show-toplevel"]))) throw invalid();
-  const commonDir = (cwd: string) => realpathSync(git(cwd, ["rev-parse", "--path-format=absolute", "--git-common-dir"]));
+  if (
+    root === realpathSync(wt.repo) ||
+    root !== realpathSync(git(wt.path, ["rev-parse", "--show-toplevel"]))
+  )
+    throw invalid();
+  const commonDir = (cwd: string) =>
+    realpathSync(git(cwd, ["rev-parse", "--path-format=absolute", "--git-common-dir"]));
   if (commonDir(wt.path) !== commonDir(wt.repo)) throw invalid();
-  const registered = git(wt.repo, ["worktree", "list", "--porcelain", "-z"]).split("\0").some((field) => {
-    if (!field.startsWith("worktree ")) return false;
-    try {
-      return realpathSync(field.slice("worktree ".length)) === root;
-    } catch {
-      return false;
-    }
-  });
+  const registered = git(wt.repo, ["worktree", "list", "--porcelain", "-z"])
+    .split("\0")
+    .some((field) => {
+      if (!field.startsWith("worktree ")) return false;
+      try {
+        return realpathSync(field.slice("worktree ".length)) === root;
+      } catch {
+        return false;
+      }
+    });
   if (!registered) throw invalid();
 }
 
@@ -49,7 +66,12 @@ function assertWorktree(wt: Worktree): void {
 export function ensureWorktree(wt: Worktree): void {
   if (!existsSync(wt.path)) {
     const branchExists = git(wt.repo, ["branch", "--list", wt.branch]) !== "";
-    git(wt.repo, branchExists ? ["worktree", "add", wt.path, wt.branch] : ["worktree", "add", wt.path, "-b", wt.branch, wt.base]);
+    git(
+      wt.repo,
+      branchExists
+        ? ["worktree", "add", wt.path, wt.branch]
+        : ["worktree", "add", wt.path, "-b", wt.branch, wt.base],
+    );
   }
   assertWorktree(wt);
 }
@@ -65,7 +87,12 @@ export function settleWorktree(wt: Worktree): boolean {
   const dirty = git(wt.path, ["status", "--porcelain", "--ignored"]) !== "";
   // The reflog goes in on stdin: a long one would overflow an argument list.
   const visited = git(wt.path, ["log", "-g", "--format=%H", "HEAD"]);
-  const ahead = git(wt.path, ["rev-list", "--count", "--stdin"], `${visited}\nrefs/heads/${wt.branch}\n^${wt.base}\n`) !== "0";
+  const ahead =
+    git(
+      wt.path,
+      ["rev-list", "--count", "--stdin"],
+      `${visited}\nrefs/heads/${wt.branch}\n^${wt.base}\n`,
+    ) !== "0";
   if (dirty || ahead) return true;
   git(wt.repo, ["worktree", "remove", wt.path]);
   git(wt.repo, ["branch", "-D", wt.branch]);

@@ -3,7 +3,15 @@
 // pi. What only the real-pi suite needs is in live-harness.mjs.
 import { afterEach } from "vitest";
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -59,6 +67,31 @@ import { writeSheet } from "../session-hook-sheets.mjs";
  * @typedef {{ deliverAs: "followUp", expandPromptTemplates: true }} UserMessageOptions
  */
 
+/** @typedef {{ type: "text", text: string }} TextPart */
+/** @template Details @typedef {{ content: TextPart[], details: Details, isError?: boolean }} FixtureResult */
+/** @typedef {ReturnType<typeof import("../../plugins/pstack/pi/agent-text.ts").listing>} AgentListing */
+/** @typedef {{ agentId: string, status: AgentRecord["status"] }} AgentDetails */
+/**
+ * The details produced by the extension's named tools. The registry associates
+ * each execute function with that same name; call preserves the association.
+ * @typedef {object} ToolDetails
+ * @property {AgentDetails} agent
+ * @property {AgentDetails} stop_agent
+ * @property {{ agentId: string, running: boolean }} send_message
+ * @property {{ agents: AgentListing }} list_agents
+ * @property {{ answers: { question: string, answer: string }[], dismissed: boolean }} ask_user_question
+ * @property {{ cancelled?: boolean, delaySeconds?: number, fireAt?: string, noop?: boolean, refused?: boolean }} schedule_wakeup
+ */
+/** @typedef {{ content?: TextPart[], block?: boolean, reason?: string }} FixtureEventResult */
+/** @typedef {(event: Record<string, unknown>, ctx: FakeCtx) => FixtureEventResult | void | Promise<FixtureEventResult | void>} FixtureHandler */
+/** @typedef {{ name: string, parameters: { properties: Record<string, { type?: string }>, required?: string[] }, promptSnippet?: string, exposure?: string, execute: (id: string, params: unknown, signal: AbortSignal | undefined, onUpdate: undefined, ctx: FakeCtx) => Promise<FixtureResult<unknown>> }} FixtureTool */
+/**
+ * Records emitted by fake-pi.mjs. Invocation-only fields are narrowed in
+ * invocations(); every log record names its emitting process.
+ * @typedef {{ kind: string, pid: number, argv?: string[], prompt?: string, cwd?: string, depth?: string | null, systemPrompt?: string | null, text?: string, as?: string }} FakeLogRecord
+ */
+/** @typedef {FakeLogRecord & { kind: "invocation", argv: string[], prompt: string, cwd: string, depth: string | null, systemPrompt: string | null }} Invocation */
+
 export const pluginRoot = fileURLToPath(new URL("../../plugins/pstack/", import.meta.url));
 const fakePiBin = fileURLToPath(new URL("./fake-pi.mjs", import.meta.url));
 
@@ -85,9 +118,11 @@ const fixtureModels = {
 };
 
 export function fakePi() {
+  /** @type {Map<string, FixtureTool>} */
   const tools = new Map();
   /** @type {Map<string, FixtureCommand>} */
   const commands = new Map();
+  /** @type {Map<string, FixtureHandler[]>} */
   const handlers = new Map();
   /** @type {{ message: PstackNotice, options: NoticeOptions }[]} */
   const messages = [];
@@ -96,11 +131,13 @@ export function fakePi() {
   /** @type {CapturedEntry[]} */
   const entries = [];
   const api = {
+    /** @param {FixtureTool} tool */
     registerTool: (tool) => tools.set(tool.name, tool),
     /** @param {string} name @param {FixtureCommand} options */
     registerCommand: (name, options) => commands.set(name, options),
     /** @returns {{ name: string, source: "extension" }[]} */
     getCommands: () => [...commands.keys()].map((name) => ({ name, source: "extension" })),
+    /** @param {string} event @param {FixtureHandler} handler */
     on(event, handler) {
       handlers.set(event, [...(handlers.get(event) ?? []), handler]);
       return () => {};
@@ -115,28 +152,57 @@ export function fakePi() {
       // SAFETY: first-party producers construct the record and identity fields.
       // launch's unchecked caught message remains unknown in the capture type;
       // JSON may omit finalText or throw; there is no extra validation here.
-      entries.push({ type: "custom", customType, data: /** @type {CapturedAgentRecord} */ (JSON.parse(JSON.stringify(data))) }),
+      entries.push({
+        type: "custom",
+        customType,
+        data: /** @type {CapturedAgentRecord} */ (JSON.parse(JSON.stringify(data))),
+      }),
   };
   return {
-    api,
+    // The fixture implements exactly the API surface install uses; registration
+    // stores the original handlers and execute functions without adapting them.
+    api: /** @type {import("@earendil-works/pi-coding-agent").ExtensionAPI} */ (
+      /** @type {unknown} */ (api)
+    ),
     tools,
     commands,
     messages,
     userMessages,
     entries,
+    /** @param {string} event @param {Record<string, unknown>} payload @param {FakeCtx} ctx */
     async emit(event, payload, ctx) {
       const results = [];
-      for (const h of handlers.get(event) ?? []) results.push(await h({ type: event, ...payload }, ctx));
+      for (const h of handlers.get(event) ?? []) {
+        // oxlint-disable-next-line eslint/no-await-in-loop -- Pi runs handlers in registration order over shared state.
+        const result = await h({ type: event, ...payload }, ctx);
+        results.push(result);
+      }
       return results;
     },
+    /** @template {keyof ToolDetails} Name @param {Name} name @param {unknown} params @param {FakeCtx} ctx @param {AbortSignal} [signal] @returns {Promise<FixtureResult<ToolDetails[Name]>>} */
     call(name, params, ctx, signal) {
-      return tools.get(name).execute("call-1", params, signal, undefined, ctx);
+      const tool = tools.get(name);
+      if (!tool) throw new Error(`No registered fixture tool: ${name}`);
+      // The extension registers this execute function under the same literal name.
+      return /** @type {Promise<FixtureResult<ToolDetails[Name]>>} */ (
+        tool.execute("call-1", params, signal, undefined, ctx)
+      );
     },
   };
 }
 
 /** @param {FakeCtxOptions} [options] */
-export function fakeCtx({ cwd, entries = [], model = { provider: "anthropic", id: "parent-model" }, mode = "tui", hasUI = false, ui = { notify() {} }, idle = true, pending = () => false, auth = "configured" } = {}) {
+export function fakeCtx({
+  cwd,
+  entries = [],
+  model = { provider: "anthropic", id: "parent-model" },
+  mode = "tui",
+  hasUI = false,
+  ui = { notify() {} },
+  idle = true,
+  pending = () => false,
+  auth = "configured",
+} = {}) {
   return {
     cwd,
     mode,
@@ -145,9 +211,9 @@ export function fakeCtx({ cwd, entries = [], model = { provider: "anthropic", id
     model,
     modelRegistry: {
       hasConfiguredAuth: () => auth === "configured",
-      getAvailableOfType: async () => (auth === "none" ? [] : [model]),
+      getAvailableOfType: () => Promise.try(() => (auth === "none" ? [] : [model])),
     },
-    isIdle: () => (typeof idle === "function" ? idle() : idle),
+    isIdle: typeof idle === "function" ? idle : () => idle,
     hasPendingMessages: pending,
     sessionManager: { getSessionId: () => "parent-session", getEntries: () => entries },
   };
@@ -184,7 +250,8 @@ export function world({ script = {}, sheet = null } = {}) {
     agentDir,
     cwd,
     settings,
-    log: () => (existsSync(logFile) ? readEntries(logFile) : []),
+    // Only fake-pi.mjs writes this file, using the FakeLogRecord fields above.
+    log: () => (existsSync(logFile) ? /** @type {FakeLogRecord[]} */ (readJsonLines(logFile)) : []),
     /** @param {string} kind */
     logged(kind) {
       return this.log().filter((r) => r.kind === kind);
@@ -194,7 +261,8 @@ export function world({ script = {}, sheet = null } = {}) {
       return waitFor(() => this.logged(kind).length >= n);
     },
     invocations() {
-      return this.logged("invocation");
+      // fake-pi writes the complete invocation payload for this discriminant.
+      return /** @type {Invocation[]} */ (this.logged("invocation"));
     },
     // A process the test itself starts; cleanup ends it.
     /** @param {string} command @param {readonly string[]} args @param {import("node:child_process").SpawnOptions} [options] */
@@ -210,7 +278,7 @@ export function world({ script = {}, sheet = null } = {}) {
     cleanup(pids = []) {
       for (const pid of new Set([...strays, ...pids, ...this.log().map((r) => r.pid)])) {
         // Zero or a negative pid would signal this process's own group.
-        if (!Number.isInteger(pid) || pid <= 1) continue;
+        if (pid === undefined || !Number.isInteger(pid) || pid <= 1) continue;
         for (const target of [-pid, pid]) {
           try {
             process.kill(target, "SIGKILL");
@@ -247,10 +315,13 @@ export async function restore(w, entries, reason = "resume") {
   return pi;
 }
 
+/** @param {{ content: TextPart[] }} result */
 export const resultText = (result) => result.content.map((c) => c.text).join("");
 
 /** @param {FakePi} pi @param {FakeCtx} ctx */
-export const listAgents = async (pi, ctx) => JSON.parse(resultText(await pi.call("list_agents", {}, ctx)));
+export const listAgents = async (pi, ctx) =>
+  // list_agents serializes the same first-party listing returned in details.
+  /** @type {AgentListing} */ (JSON.parse(resultText(await pi.call("list_agents", {}, ctx))));
 
 /** @template T @param {T} data */
 export const agentEntry = (data) => ({ type: "custom", customType: "pstack-agents", data });
@@ -258,14 +329,21 @@ export const agentEntry = (data) => ({ type: "custom", customType: "pstack-agent
 // A persisted record with fields replaced: identity ones under `agent`, the rest beside it.
 // Replacements deliberately include malformed values; restore must validate the candidate.
 /** @param {CapturedAgentRecord} data @param {Record<string, unknown> & { agent?: Record<string, unknown> }} [replacement] @returns {Record<string, unknown>} */
-export const recordWith = (data, { agent = {}, ...state } = {}) => ({ ...data, ...state, agent: { ...data.agent, ...agent } });
+export const recordWith = (data, { agent = {}, ...state } = {}) => ({
+  ...data,
+  ...state,
+  agent: { ...data.agent, ...agent },
+});
 
 // An agent file's body, which is what its child gets as a system prompt.
 /** @param {string} rel */
-export const agentBody = (rel) => /^---\n[\s\S]*?\n---\n([\s\S]*)$/.exec(readFileSync(join(pluginRoot, rel), "utf8"))[1].trim();
+export const agentBody = (rel) =>
+  /^---\n[\s\S]*?\n---\n([\s\S]*)$/.exec(readFileSync(join(pluginRoot, rel), "utf8"))[1].trim();
 
 // The value an invocation's argv gives a flag, or null without the flag.
-export const flag = (inv, name) => (inv.argv.includes(name) ? inv.argv[inv.argv.indexOf(name) + 1] : null);
+/** @param {Invocation} inv @param {string} name */
+export const flag = (inv, name) =>
+  inv.argv.includes(name) ? inv.argv[inv.argv.indexOf(name) + 1] : null;
 
 /** @param {string} dir */
 export function gitRepo(dir) {
@@ -288,23 +366,40 @@ export function gitRepo(dir) {
 /** @param {() => unknown} predicate @param {number} [timeoutMs] */
 export async function waitFor(predicate, timeoutMs = 4000) {
   const deadline = Date.now() + timeoutMs;
+  // oxlint-disable-next-line eslint/no-await-in-loop -- Cases share fixture state or ordered assertions; finish each before starting the next.
   while (!(await predicate())) {
-    if (Date.now() > deadline) throw new Error(`waitFor timed out after ${timeoutMs} ms: ${predicate}`);
+    if (Date.now() > deadline)
+      throw new Error(`waitFor timed out after ${timeoutMs} ms: ${String(predicate)}`);
+    // oxlint-disable-next-line eslint/no-await-in-loop -- Cases share fixture state or ordered assertions; finish each before starting the next.
     await sleep(20);
   }
 }
 
 // EPERM means the process exists but belongs to another user.
+/** @param {number} pid */
 export function alive(pid) {
   try {
     process.kill(pid, 0);
     return true;
   } catch (e) {
-    return e.code === "EPERM";
+    return e instanceof Error && "code" in e && e.code === "EPERM";
   }
 }
 
 /** @param {number} ms */
-export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+export const sleep = (ms) =>
+  new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 
-export const readEntries = (file) => readFileSync(file, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l));
+/** @param {string} file @returns {unknown[]} */
+const readJsonLines = (file) =>
+  readFileSync(file, "utf8")
+    .split("\n")
+    .filter(Boolean)
+    .map((l) => /** @type {unknown} */ (JSON.parse(l)));
+
+/** @param {string} file */
+export const readEntries = (file) =>
+  // Real Pi writes the session files consumed by the live suite.
+  /** @type {import("@earendil-works/pi-coding-agent").SessionEntry[]} */ (readJsonLines(file));

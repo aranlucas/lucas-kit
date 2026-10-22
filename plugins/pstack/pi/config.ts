@@ -1,7 +1,6 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { basename, dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { basename, join } from "node:path";
 import { type Static, Type } from "typebox";
 import { Value } from "typebox/value";
 
@@ -45,10 +44,11 @@ export function defaultSettings(
   readDepth: () => number,
   env: NodeJS.ProcessEnv = process.env,
 ): Settings {
-  const pluginRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
+  const pluginRoot = join(import.meta.dirname, "..");
   return {
     pluginRoot,
     modelsFile: join(pluginRoot, "models.json"),
+    // oxlint-disable-next-line typescript/prefer-nullish-coalescing -- Empty strings intentionally select the default; nullish coalescing would retain them.
     agentDir: env.PI_CODING_AGENT_DIR || join(homedir(), ".pi", "agent"),
     pi: piInvocation(),
     get depth() {
@@ -163,6 +163,7 @@ function parseAgentFile(type: string, text: string, efforts: string[]): AgentDef
   if (effort !== undefined && !efforts.includes(effort)) {
     throw new Error(`${type}: effort "${effort}" is not one of ${efforts.join(", ")}`);
   }
+  // oxlint-disable-next-line typescript/prefer-nullish-coalescing -- Empty strings intentionally select the default; nullish coalescing would retain them.
   return { body, model: fields.get("model") || undefined, effort };
 }
 
@@ -178,7 +179,7 @@ export function loadAgentTypes(
     if (!existsSync(full)) continue;
     for (const file of readdirSync(full)
       .filter((f) => f.endsWith(".md"))
-      .sort()) {
+      .toSorted()) {
       const type = `pstack:${basename(file, ".md")}`;
       types.set(type, parseAgentFile(type, readFileSync(join(full, file), "utf8"), efforts));
     }

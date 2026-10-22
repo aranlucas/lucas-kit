@@ -43,7 +43,11 @@ export class Scheduler {
   // ctx.isIdle(), which is also false during a manual compaction.
   running = false;
 
-  constructor(private readonly pi: ExtensionAPI) {}
+  private readonly pi: ExtensionAPI;
+
+  constructor(pi: ExtensionAPI) {
+    this.pi = pi;
+  }
 
   fire(prompt: string): void {
     this.pi.sendUserMessage(prompt, { deliverAs: "followUp", expandPromptTemplates: true });
@@ -145,50 +149,52 @@ export function registerSchedule(pi: ExtensionAPI, scheduler: Scheduler, oneShot
     exposure: "model-only",
     description: `Schedule this session to be re-invoked with a prompt after delaySeconds (clamped to ${MIN_DELAY_S}-${MAX_DELAY_S}), once the session is idle. One wakeup is pending at a time: a new call replaces it, and stop: true cancels it. Used by /loop's self-paced mode.`,
     parameters: wakeupParams,
-    async execute(_id, params, _signal, _onUpdate, ctx) {
-      if (params.stop) {
-        // What is pending in a sealed slot is a loop start the user asked for, not this run's.
-        const had = !scheduler.sealed && scheduler.cancelWakeup();
-        const text = had ? "Pending wakeup cancelled." : "No wakeup was pending.";
-        return { content: [{ type: "text", text }], details: { cancelled: had } };
-      }
-      if (params.delaySeconds === undefined || !params.prompt) {
-        throw new Error("schedule_wakeup needs delaySeconds and prompt unless stop is true.");
-      }
-      if (scheduler.sealed) {
-        ctx.ui.notify(
-          "A wakeup this run asked for was not scheduled: /loop ended or replaced the loop while it ran.",
-          "warning",
-        );
+    execute(_id, params, _signal, _onUpdate, ctx) {
+      return Promise.try(() => {
+        if (params.stop) {
+          // What is pending in a sealed slot is a loop start the user asked for, not this run's.
+          const had = !scheduler.sealed && scheduler.cancelWakeup();
+          const text = had ? "Pending wakeup cancelled." : "No wakeup was pending.";
+          return { content: [{ type: "text", text }], details: { cancelled: had } };
+        }
+        if (params.delaySeconds === undefined || !params.prompt) {
+          throw new Error("schedule_wakeup needs delaySeconds and prompt unless stop is true.");
+        }
+        if (scheduler.sealed) {
+          ctx.ui.notify(
+            "A wakeup this run asked for was not scheduled: /loop ended or replaced the loop while it ran.",
+            "warning",
+          );
+          return {
+            content: [
+              {
+                type: "text",
+                text: "Not scheduled: the user ended or replaced the loop with a /loop command during this run. Do not schedule another wakeup in this run.",
+              },
+            ],
+            details: { refused: true },
+          };
+        }
+        if (oneShot.exits(ctx)) {
+          throw new Error(
+            `schedule_wakeup cannot fire in a ${ctx.mode} run: pi exits when this run ends. Finish the work in this run instead.`,
+          );
+        }
+        const seconds = clampDelay(params.delaySeconds);
+        scheduler.scheduleWakeup(seconds, params.prompt, ctx);
+        const fireAt = new Date(Date.now() + seconds * 1000).toISOString();
+        const clamped =
+          seconds !== params.delaySeconds ? ` (clamped from ${params.delaySeconds})` : "";
         return {
           content: [
             {
               type: "text",
-              text: "Not scheduled: the user ended or replaced the loop with a /loop command during this run. Do not schedule another wakeup in this run.",
+              text: `Wakeup scheduled in ${seconds}s${clamped}, at ${fireAt}. It replaces any earlier pending wakeup.`,
             },
           ],
-          details: { refused: true },
+          details: { delaySeconds: seconds, fireAt, noop: params.noop === true },
         };
-      }
-      if (oneShot.exits(ctx)) {
-        throw new Error(
-          `schedule_wakeup cannot fire in a ${ctx.mode} run: pi exits when this run ends. Finish the work in this run instead.`,
-        );
-      }
-      const seconds = clampDelay(params.delaySeconds);
-      scheduler.scheduleWakeup(seconds, params.prompt, ctx);
-      const fireAt = new Date(Date.now() + seconds * 1000).toISOString();
-      const clamped =
-        seconds !== params.delaySeconds ? ` (clamped from ${params.delaySeconds})` : "";
-      return {
-        content: [
-          {
-            type: "text",
-            text: `Wakeup scheduled in ${seconds}s${clamped}, at ${fireAt}. It replaces any earlier pending wakeup.`,
-          },
-        ],
-        details: { delaySeconds: seconds, fireAt, noop: params.noop === true },
-      };
+      });
     },
   });
 

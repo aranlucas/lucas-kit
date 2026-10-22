@@ -14,7 +14,15 @@ concurrency:
 
 jobs:
   generated:
-    name: Generated files current
+    name: ${{ matrix.check-name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - node: 24
+            check-name: Generated files current
+          - node: 26
+            check-name: Generated files current (Node 26)
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -24,14 +32,19 @@ jobs:
       - name: Set up Node.js and pnpm dependencies
         uses: pnpm/setup@a0881977cd8ea73b1ed212236c99ca10dcc80cf4 # v3.1.1
         with:
-          runtime: node@24
+          runtime: node@${{ matrix.node }}
           require-lockfile: true
+      - name: Lint first-party runtime code and Pi session fixtures
+        run: pnpm lint:runtime
       - name: Check generated files and plugin invariants
         run: pnpm generate:check
       - name: Tool and invariant fixture tests
         run: pnpm test
         env:
           PSTACK_REQUIRE_PNPM_SKILLS: "1"
+          PI_PACKAGE_DIR: ${{ github.workspace }}/node_modules/@earendil-works/pi-coding-agent
+          PSTACK_PI_REQUIRE_CATALOG: "1"
+          PSTACK_PI_REQUIRE_RUNTIME: "1"
 
   forks:
     name: Fork registry
