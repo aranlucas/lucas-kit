@@ -17,7 +17,7 @@ export function packSkills(root = repoRoot, destination = join(root, "dist")) {
   const source = join(root, "plugins/pstack/skills");
   validateSkillsTree(source);
   validateProsePaths(source);
-  const { name, version, author, homepage, repository, license, packageManager } = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
+  const { name, version, author, homepage, repository, license, packageManager, engines } = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
   const output = resolve(destination);
   const staging = mkdtempSync(join(tmpdir(), "lucas-kit-skills-"));
   try {
@@ -37,6 +37,7 @@ export function packSkills(root = repoRoot, destination = join(root, "dist")) {
       description: "Lucas Kit agent skills for pnpm projects. Requires T3 Code's MCP tools.",
       author, homepage, repository, license,
       packageManager,
+      engines,
       publishConfig: { access: "public", executableFiles },
       files: ["skills", "README.md", ...notices],
     }, null, 2)}\n`);

@@ -1,3 +1,4 @@
+engineStrict: true
 autoInstallPeers: false
 minimumReleaseAgeExclude:
   - "@aranlucas/oxforge@0.1.1 || 0.1.3"
