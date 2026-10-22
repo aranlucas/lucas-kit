@@ -51,7 +51,7 @@ test('publishes a note linking an artifact with a parenthesized angle-bracket de
   writeFileSync(resume, '[Questions](<questions (draft).md>)\n');
 
   const published = run('publish', '--note', resume, '--artifact', artifact);
-  assert.equal(published.status, 0, published.value.detail);
+  assert.equal(published.status, 0, JSON.stringify(published.value));
   assert.equal(run('read').value.checkpoint.artifacts[0].path, artifact);
 }));
 
@@ -75,21 +75,21 @@ for (const [form, text, artifacts, unregistered, names] of [
 ]) test(`rejects ${form} by naming it and stating the documented link rule`, () => fixture(({ run }) => {
   const result = publishNote(run, text, artifacts, unregistered);
   assert.equal(result.status, 1);
-  assert.ok(result.value.detail.includes(names), result.value.detail);
+  assert.ok(result.value.detail.includes(names), JSON.stringify(result.value));
   const rule = result.value.detail.slice(result.value.detail.indexOf('Link each local file'));
-  assert.ok(rule.startsWith('Link each local file') && storage.includes(rule), result.value.detail);
+  assert.ok(rule.startsWith('Link each local file') && storage.includes(rule), JSON.stringify(result.value));
 }));
 
 test('publishes a note that also links URLs and an anchor', () => fixture(({ run }) => {
   const text = '[Q](q.md), [site](https://example.com/a), [feed](ws://example.com/b) and [top](#top)\n';
   const published = publishNote(run, text, ['q.md']);
-  assert.equal(published.status, 0, published.value.detail);
+  assert.equal(published.status, 0, JSON.stringify(published.value));
 }));
 
 test('ignores links inside code spans and fenced code blocks', () => fixture(({ run }) => {
   const text = 'Start with [Q](q.md). Quote `[x](missing.md)` literally.\n\n```markdown\n[y](absent.md)\n```\n\n~~~\n[z](gone.md)\n~~~\n';
   const published = publishNote(run, text, ['q.md']);
-  assert.equal(published.status, 0, published.value.detail);
+  assert.equal(published.status, 0, JSON.stringify(published.value));
   assert.equal(run('read').status, 0);
 }));
 

@@ -300,7 +300,7 @@ export function parseVerdict(value: string): Verdict {
 // A spreadsheet reads a leading = + - or @ as a formula and a leading ' as a
 // text marker. Such a cell is written with one more ' and unquoteCell strips it.
 function cleanCell(value: string): string {
-  const cleaned = value.replace(/[\t\n\r]/g, " ");
+  const cleaned = value.replaceAll(/[\t\n\r]/g, " ");
   return /^['=+\-@]/.test(cleaned) ? `'${cleaned}` : cleaned;
 }
 
@@ -311,7 +311,7 @@ function unquoteCell(value: string): string {
 }
 
 function requiredCell(value: string, label: string): string {
-  const cleaned = value.replace(/[\t\n\r]/g, " ");
+  const cleaned = value.replaceAll(/[\t\n\r]/g, " ");
   if (cleaned.trim().length === 0) {
     throw new UserError(`${label} must not be empty`);
   }
@@ -319,7 +319,7 @@ function requiredCell(value: string, label: string): string {
 }
 
 function requiredLine(value: string, label: string): string {
-  const cleaned = value.replace(/[\n\r]/g, " ").trim();
+  const cleaned = value.replaceAll(/[\n\r]/g, " ").trim();
   if (cleaned.length === 0) {
     throw new UserError(`${label} must not be empty`);
   }
@@ -543,7 +543,7 @@ async function readTsv(
   header: string,
   width: number
 ): Promise<readonly (readonly string[])[]> {
-  const lines = (await requiredFile(path)).replace(/\r/g, "").split("\n");
+  const lines = (await requiredFile(path)).replaceAll('\r', "").split("\n");
   if (lines.shift() !== header) {
     throw new UserError(`${basename(path)} has an invalid header`);
   }
@@ -710,7 +710,7 @@ function renderGates(rows: readonly Gate[]): string {
 
 async function readGates(store: string): Promise<readonly Gate[]> {
   const raw = (await requiredFile(join(store, "gates.md")))
-    .replace(/\r/g, "")
+    .replaceAll('\r', "")
     .trim();
   if (raw.length === 0) {
     return [];
@@ -828,8 +828,8 @@ async function readFrontier(store: string): Promise<Frontier> {
 async function readStanding(
   store: string
 ): Promise<readonly StandingLine[]> {
-  const raw = (await requiredFile(join(store, "preferences.md"))).replace(
-    /\r/g,
+  const raw = (await requiredFile(join(store, "preferences.md"))).replaceAll(
+    '\r',
     ""
   );
   if (raw.trim().length === 0) {
@@ -978,7 +978,7 @@ function changed(before: StatusSummary | null, after: StatusSummary): string {
 }
 
 function markdown(value: string): string {
-  return value.replace(/[\t\n\r]/g, " ").replace(/\\/g, "\\\\").replace(/\|/g, "\\|");
+  return value.replaceAll(/[\t\n\r]/g, " ").replaceAll('\\', "\\\\").replaceAll('|', "\\|");
 }
 
 function table(
@@ -1581,7 +1581,7 @@ export function openStore(
             `store is not initialized at ${store}; run orch init`
           );
         }
-        const timestamp = pointer.ts.replace(/[:.]/g, "-");
+        const timestamp = pointer.ts.replaceAll(/[:.]/g, "-");
         const filename = `${timestamp}-${process.pid}-${randomUUID()}.tsv`;
         const contents = `${pointerCells(pointer).map(cleanCell).join("\t")}\n`;
         await atomicWrite(join(inbox, filename), contents);

@@ -29,7 +29,7 @@ export function fakeGitHub(
   if (!query.includes("mutation")) {
     // Drop nested selections, so `mergeQueueEntry { id }` does not count as
     // selecting the pull request's own `id`.
-    const selection = query.replace(/\{[^{}]*\}/g, "");
+    const selection = query.replaceAll(/\{[^{}]*\}/g, "");
     const selected = Object.entries(pullRequest).filter(([field]) =>
       new RegExp(`\\b${field}\\b`).test(selection)
     );

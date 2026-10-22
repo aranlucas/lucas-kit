@@ -475,11 +475,13 @@ describe("pathSpellings", () => {
     });
 
     // Stands in for a filesystem: each listed path reports the given device and inode.
+    /** @param {Record<string, bigint[]>} ids @returns {import("../plugins/pstack/skills/poteto-mode/scripts/worktree-audit.mjs").IdentityStat} */
     const reporting = (ids) => (path, options) => {
       if (!ids[path]) return statSync(path, options);
       const [dev, ino] = ids[path];
       return options?.bigint ? { dev, ino } : { dev: Number(dev), ino: Number(ino) };
     };
+    /** @param {string} path @param {import("../plugins/pstack/skills/poteto-mode/scripts/worktree-audit.mjs").IdentityStat} stat */
     const spell = (path, stat) => pathSpellings(path, (dir) => symlinkTargets(dir, stat), stat);
 
     test("a link that shares its identity with two directories on the path is a spelling of both", () => {

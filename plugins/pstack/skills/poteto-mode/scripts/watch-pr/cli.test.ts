@@ -364,7 +364,7 @@ describe("main", () => {
     const reader = fakeReader();
     const harness = testRuntime(reader);
     expect(await main(["--help"], harness.runtime)).toBe(0);
-    const help = harness.stdout.join("").replace(/\s+/g, " ");
+    const help = harness.stdout.join("").replaceAll(/\s+/g, " ");
     expect(help).toContain("JSON (NDJSON while polling)");
     expect(help).toContain(
       "print one status table and exit; exit 0 means the table was read, not that the PR is ready"

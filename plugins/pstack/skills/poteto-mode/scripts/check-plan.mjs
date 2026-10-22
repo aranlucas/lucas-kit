@@ -72,9 +72,9 @@ for (let i = start; i < raw.length; i++) {
 	lines.push({ n, text, code });
 	if (code) continue;
 	const prose = text
-		.replace(/`[^`]*`/g, "`")
-		.replace(/!\[[^\]]*\]\([^)]*\)/g, "")
-		.replace(/\]\([^)]*\)/g, "]");
+		.replaceAll(/`[^`]*`/g, "`")
+		.replaceAll(/!\[[^\]]*\]\([^)]*\)/g, "")
+		.replaceAll(/\]\([^)]*\)/g, "]");
 	if (/[\u2013\u2014]/.test(prose)) fail(n, "long dash");
 	if (/[\u2018\u2019\u201c\u201d]/.test(prose)) fail(n, "curly quote");
 	if (/: \S/.test(prose)) fail(n, "mid-sentence colon");
@@ -196,7 +196,7 @@ for (const pr of prSections) {
 	}
 
 	const total = boxes(pr.body).length;
-	const cells = SUB_BLOCKS.flatMap((s) => s === "Depends on." ? [] : [`${s.replace(/[ ,.]+/g, "-").replace(/-$/, "").toLowerCase()}=${counts[s] ?? 0}`]);
+	const cells = SUB_BLOCKS.flatMap((s) => s === "Depends on." ? [] : [`${s.replaceAll(/[ ,.]+/g, "-").replace(/-$/, "").toLowerCase()}=${counts[s] ?? 0}`]);
 	report.push(`${pr.title}  boxes=${total}  ${cells.join(" ")}`);
 }
 

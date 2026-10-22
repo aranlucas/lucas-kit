@@ -48,8 +48,8 @@ function resolveLink(note, link, target) {
 }
 function verifyLinks(note, artifacts) {
   const prose = readFileSync(note.path, 'utf8')
-    .replace(/^ {0,3}((`|~)\2{2,}).*\n[\s\S]*?(?:^ {0,3}\1\2*[ \t]*$|(?![\s\S]))/gm, ' ')
-    .replace(/(?<!`)(`+)(?!`)[\s\S]*?(?<!`)\1(?!`)/g, ' ');
+    .replaceAll(/^ {0,3}((`|~)\2{2,}).*\n[\s\S]*?(?:^ {0,3}\1\2*[ \t]*$|(?![\s\S]))/gm, ' ')
+    .replaceAll(/(?<!`)(`+)(?!`)[\s\S]*?(?<!`)\1(?!`)/g, ' ');
   const links = [...prose.matchAll(/\[[^\]]*\]\((?:<([^<>]+)>|([^)]+))\)/g)]
     .flatMap(([link, angled, bare]) => /^(?:[a-z]{2,}:|#)/i.test(angled ?? bare)
       ? []

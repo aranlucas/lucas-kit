@@ -83,7 +83,9 @@ const runGh = (args, cwd) =>
 
 // `--porcelain -z` output: NUL-separated fields, one record per worktree, the
 // primary worktree first.
+/** @param {string} output */
 export function parseWorktrees(output) {
+  /** @type {{path: string, prunable: boolean, locked: string|null}[]} */
   const worktrees = [];
   for (const field of output.split("\0")) {
     if (field.startsWith("worktree ")) worktrees.push({ path: field.slice("worktree ".length), prunable: false, locked: null });
@@ -110,6 +112,8 @@ export function defaultTranscriptRoots({ env = process.env, home = homedir(), st
 }
 
 // APFS inode numbers pass 2^53, where two of them read as one number.
+/** @typedef {(path: string, options: {bigint: true}) => {dev: bigint, ino: bigint}} IdentityStat */
+/** @param {string} path @param {IdentityStat} stat */
 const fileId = (path, stat) => {
   const { dev, ino } = stat(path, { bigint: true });
   return `${dev}:${ino}`;
@@ -123,6 +127,7 @@ const fileId = (path, stat) => {
 // spells nothing. When stat fails any other way the route is closed to this
 // process and the link could land anywhere, so the error propagates and the
 // caller leaves the worktree's chat fact unknown.
+/** @param {string} dir @param {IdentityStat} [stat] */
 export function symlinkTargets(dir, stat = statSync) {
   return readdirSync(dir, { withFileTypes: true }).filter((entry) => entry.isSymbolicLink()).flatMap((entry) => {
     const link = join(dir, entry.name);
@@ -139,6 +144,7 @@ export function symlinkTargets(dir, stat = statSync) {
 // through a symlink in an ancestor directory, as macOS spells /private/tmp/x
 // as /tmp/x, or through several, as /tmp/link/x when /private/tmp/link points
 // at /private/tmp/real. A worktree whose directory is gone keeps git's spelling.
+/** @param {string} path @param {typeof symlinkTargets} [linksIn] @param {IdentityStat} [stat] */
 export function pathSpellings(path, linksIn = symlinkTargets, stat = statSync) {
   let resolved;
   try {
@@ -288,11 +294,13 @@ function dirtyLabel({ wip, untracked }) {
 }
 
 // `--porcelain -z` hands over the lock reason raw, newlines included.
+/** @param {string|null} locked */
 function lockedLabel(locked) {
   if (locked === null) return "-";
-  return locked.replace(/\s+/g, " ").trim() || "locked";
+  return locked.replaceAll(/\s+/g, " ").trim() || "locked";
 }
 
+/** @param {{path: string, locked: string|null}} worktree */
 function auditWorktree({ path, locked }, { repo, trunk, fetched, prs, chats, now }) {
   const head = probe(() => git(path, "rev-parse", "HEAD"));
   const age = bind(head, () => probe(() => Math.trunc((now - Number(git(path, "log", "-1", "--format=%ct", "HEAD"))) / DAY)));
