@@ -56,3 +56,10 @@ overrides:
   "@earendil-works/pi-mcp": "1.1.0"
   "@earendil-works/pi-telemetry": "1.1.0"
   "@earendil-works/pi-tui": "1.1.0"
+
+# Pi's prebuilt dependency distributions work without these install hooks.
+# Explicit denials keep strictDepBuilds enabled for every unreviewed package.
+allowBuilds:
+  "@google/genai@2.21.0": false
+  "esbuild@0.28.2": false
+  "protobufjs@7.6.6": false
