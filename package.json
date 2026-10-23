@@ -44,7 +44,8 @@
     "format": "oxfmt --write",
     "format:check": "oxfmt --check",
     "lint:test": "oxlint --config node_modules/@aranlucas/oxforge/configs/vitest.json test --deny-warnings",
-    "prepare": "husky"
+    "prepare": "husky",
+    "build": "pnpm generate && pnpm pack:skills"
   },
   "devDependencies": {
     "@aranlucas/oxforge": "0.2.2",

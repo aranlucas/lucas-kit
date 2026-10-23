@@ -8,7 +8,8 @@
     "lint": "oxlint --type-aware",
     "lint:fix": "oxlint --type-aware --fix",
     "format": "oxfmt --write",
-    "format:check": "oxfmt --check"
+    "format:check": "oxfmt --check",
+    "build": "tsc --project tsconfig.json --noEmit false --rewriteRelativeImportExtensions --outDir dist"
   },
   "dependencies": {
     "commander": "15.0.0"
