@@ -152,7 +152,7 @@
     },
     "plugins/pstack/skills/poteto-mode/scripts/package.json": {
       "kind": "policy",
-      "why": "Typechecks the complete scripts tree, replaces the test runner with Vitest, and pins Node.js, pnpm, Vite, TypeScript, and Node types while retaining the upstream commander dependency.",
+      "why": "Typechecks the complete scripts tree, replaces the test runner with Vitest, and requires Node.js 26 only, pins pnpm, Vite, TypeScript, and Node types while retaining the upstream commander dependency.",
       "since": "0.9.23",
       "upstream": "not-proposed"
     },

@@ -18,7 +18,6 @@ import { readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import process from "node:process";
-import { fileURLToPath } from "node:url";
 
 import { candidates, rethrowUnlessRemoved } from "../../reflect/scripts/find-transcript.mjs";
 
@@ -37,6 +36,13 @@ import { candidates, rethrowUnlessRemoved } from "../../reflect/scripts/find-tra
  */
 /** @template Value @typedef {KnownFact<Value> | Readonly<UnknownFact>} Fact */
 
+/** @typedef {{ wip: number, untracked: number }} DirtyState */
+/** @typedef {{ number: number, state: string, headRefName: string, headRefOid: string }} PullRequest */
+/** @typedef {{ trunk: Fact<unknown>, head: Fact<string>, age: Fact<number>, ancestry: Fact<boolean>, dirty: Fact<DirtyState>, remote: Fact<string>, pr: Fact<PullRequest | null>, recent: Fact<boolean>, locked: Fact<string | null> }} WorktreeFacts */
+/** @typedef {[link: string, target: { id: string, name: string | undefined }]} SymlinkTarget */
+/** @typedef {[home: string, link: string, target: string]} SymlinkMatch */
+/** @typedef {{ repo: string, trunk: string, fetched: Fact<string>, prs: Fact<PullRequest[]>, chats: Map<string, Fact<number | null>>, now: number }} AuditContext */
+
 /** @template Value @param {Value} value @returns {KnownFact<Value>} */
 const known = (value) => ({ known: true, value });
 /** @type {Readonly<UnknownFact>} */
@@ -49,15 +55,38 @@ const probe = (read) => {
     return UNKNOWN;
   }
 };
+/** @template Value, Result @param {Fact<Value>} fact @param {(value: Value) => Fact<Result>} next @returns {Fact<Result>} */
 const bind = (fact, next) => (fact.known ? next(fact.value) : UNKNOWN);
 
 const DAY = 86400;
 const RECENT_DAYS = 4;
-const HEADER = ["SIZE", "AGE", "MERGED", "DIRTY", "REMOTE", "PR", "LAST_CHAT", "BUCKET", "LOCKED", "WORKTREE"];
+const HEADER = [
+  "SIZE",
+  "AGE",
+  "MERGED",
+  "DIRTY",
+  "REMOTE",
+  "PR",
+  "LAST_CHAT",
+  "BUCKET",
+  "LOCKED",
+  "WORKTREE",
+];
 // Merged and closed PRs drop out of gh's default open-only listing.
-const GH_PR_LIST = ["pr", "list", "--author", "@me", "--state", "all", "--limit", "1000",
-  "--json", "number,state,headRefName,headRefOid"];
+const GH_PR_LIST = [
+  "pr",
+  "list",
+  "--author",
+  "@me",
+  "--state",
+  "all",
+  "--limit",
+  "1000",
+  "--json",
+  "number,state,headRefName,headRefOid",
+];
 
+/** @param {WorktreeFacts} facts */
 export function classify(facts) {
   const { locked, dirty, pr, recent, ancestry, head } = facts;
   if (locked.known && locked.value !== null) return "hold-locked";
@@ -71,10 +100,34 @@ export function classify(facts) {
   return "review";
 }
 
+/** @param {unknown} value @returns {value is PullRequest} */
+function isPullRequest(value) {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    "number" in value &&
+    typeof value.number === "number" &&
+    "state" in value &&
+    typeof value.state === "string" &&
+    "headRefName" in value &&
+    typeof value.headRefName === "string" &&
+    "headRefOid" in value &&
+    typeof value.headRefOid === "string"
+  );
+}
+
 // The default 1 MiB buffer fails a status that lists several thousand untracked files.
+/**
+ * @param {string} cwd
+ * @param {string[]} args
+ */
 function git(cwd, ...args) {
-  return execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], maxBuffer: Infinity })
-    .replace(/\n+$/, "");
+  return execFileSync("git", args, {
+    cwd,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+    maxBuffer: Infinity,
+  }).replace(/\n+$/, "");
 }
 
 /** @param {readonly string[]} args @param {string} cwd */
@@ -88,26 +141,46 @@ export function parseWorktrees(output) {
   /** @type {{path: string, prunable: boolean, locked: string|null}[]} */
   const worktrees = [];
   for (const field of output.split("\0")) {
-    if (field.startsWith("worktree ")) worktrees.push({ path: field.slice("worktree ".length), prunable: false, locked: null });
+    if (field.startsWith("worktree "))
+      worktrees.push({ path: field.slice("worktree ".length), prunable: false, locked: null });
     else if (field.startsWith("prunable")) worktrees.at(-1).prunable = true;
     else if (field.startsWith("locked")) worktrees.at(-1).locked = field.slice("locked ".length);
   }
   return worktrees;
 }
 
-export function defaultTranscriptRoots({ env = process.env, home = homedir(), stat = statSync } = {}) {
+export function defaultTranscriptRoots({
+  env = process.env,
+  home = homedir(),
+  stat = statSync,
+} = {}) {
+  // oxlint-disable-next-line typescript/prefer-nullish-coalescing -- Empty strings intentionally select the default; nullish coalescing would retain them.
   const claude = join(env.CLAUDE_CONFIG_DIR || join(home, ".claude"), "projects");
+  // oxlint-disable-next-line typescript/prefer-nullish-coalescing -- Empty strings intentionally select the default; nullish coalescing would retain them.
   const codex = env.CODEX_HOME || join(home, ".codex");
+  // oxlint-disable-next-line typescript/prefer-nullish-coalescing -- Empty strings intentionally select the default; nullish coalescing would retain them.
   const piAgent = env.PI_CODING_AGENT_DIR || join(home, ".pi", "agent");
+  // oxlint-disable-next-line typescript/prefer-nullish-coalescing -- Empty strings intentionally select the default; nullish coalescing would retain them.
   const copilot = join(env.COPILOT_HOME || join(home, ".copilot"), "session-state");
-  const found = [claude, join(codex, "sessions"), join(codex, "archived_sessions"),
-    join(piAgent, "sessions"), join(piAgent, "pstack"), copilot].filter((root) => {
-      try {
-        return stat(root, { throwIfNoEntry: false }) !== undefined;
-      } catch (error) {
-        return !["ENOENT", "ENOTDIR"].includes(error.code);
-      }
-    });
+  const found = [
+    claude,
+    join(codex, "sessions"),
+    join(codex, "archived_sessions"),
+    join(piAgent, "sessions"),
+    join(piAgent, "pstack"),
+    copilot,
+  ].filter((root) => {
+    try {
+      return stat(root, { throwIfNoEntry: false }) !== undefined;
+    } catch (error) {
+      return !(
+        error &&
+        typeof error === "object" &&
+        "code" in error &&
+        (error.code === "ENOENT" || error.code === "ENOTDIR")
+      );
+    }
+  });
   return found.length ? found : [claude];
 }
 
@@ -116,7 +189,7 @@ export function defaultTranscriptRoots({ env = process.env, home = homedir(), st
 /** @param {string} path @param {IdentityStat} stat */
 const fileId = (path, stat) => {
   const { dev, ino } = stat(path, { bigint: true });
-  return `${dev}:${ino}`;
+  return `${String(dev)}:${String(ino)}`;
 };
 
 // A link is known by the identity stat reports for what it lands on, and by
@@ -127,17 +200,25 @@ const fileId = (path, stat) => {
 // spells nothing. When stat fails any other way the route is closed to this
 // process and the link could land anywhere, so the error propagates and the
 // caller leaves the worktree's chat fact unknown.
-/** @param {string} dir @param {IdentityStat} [stat] */
+/** @param {string} dir @param {IdentityStat} [stat] @returns {SymlinkTarget[]} */
 export function symlinkTargets(dir, stat = statSync) {
-  return readdirSync(dir, { withFileTypes: true }).filter((entry) => entry.isSymbolicLink()).flatMap((entry) => {
-    const link = join(dir, entry.name);
-    try {
-      return [[link, { id: fileId(link, stat), name: probe(() => realpathSync(link)).value }]];
-    } catch (error) {
-      if (["ENOENT", "ELOOP"].includes(error.code)) return [];
-      throw error;
-    }
-  });
+  return readdirSync(dir, { withFileTypes: true })
+    .filter((entry) => entry.isSymbolicLink())
+    .flatMap((entry) => {
+      const link = join(dir, entry.name);
+      try {
+        return [[link, { id: fileId(link, stat), name: probe(() => realpathSync(link)).value }]];
+      } catch (error) {
+        if (
+          error &&
+          typeof error === "object" &&
+          "code" in error &&
+          (error.code === "ENOENT" || error.code === "ELOOP")
+        )
+          return [];
+        throw error;
+      }
+    });
 }
 
 // Git reports a worktree by its resolved path, while a session may name it
@@ -150,7 +231,8 @@ export function pathSpellings(path, linksIn = symlinkTargets, stat = statSync) {
   try {
     resolved = realpathSync(path);
   } catch (error) {
-    if (error.code === "ENOENT") return [path];
+    if (error && typeof error === "object" && "code" in error && error.code === "ENOENT")
+      return [path];
     throw error;
   }
   const ancestors = [];
@@ -162,22 +244,36 @@ export function pathSpellings(path, linksIn = symlinkTargets, stat = statSync) {
   // A link lands on every directory that it names or that shares its identity:
   // a filesystem may report one identity for several, and a spare spelling
   // costs a hold where a missed one can cost the worktree.
-  const links = ancestors.flatMap((dir) => linksIn(dir).flatMap(([link, { id, name }]) =>
-    onPath.flatMap((target) => target === name || fileId(target, stat) === id ? [[dir, link, target]] : [])));
+  const links = ancestors.flatMap((dir) =>
+    linksIn(dir).flatMap(
+      /** @returns {SymlinkMatch[]} */ ([link, { id, name }]) =>
+        onPath.flatMap((target) =>
+          target === name || fileId(target, stat) === id ? [[dir, link, target]] : [],
+        ),
+    ),
+  );
   // Spell each directory from the root down, so a link's own directory is
   // already spelled when the link is applied. A link back up to an ancestor of
   // its directory is applied through that directory's resolved spelling only,
   // which keeps the set finite.
+  /** @type {Map<string, string[]>} */
   const spelled = new Map();
   for (const dir of onPath) {
     const parent = dirname(dir);
-    const forms = new Set(parent === dir ? [dir] : spelled.get(parent).map((form) => join(form, basename(dir))));
+    const forms = new Set(
+      parent === dir
+        ? [dir]
+        : (spelled.get(parent) ?? [parent]).map((/** @type {string} */ form) =>
+            join(form, basename(dir)),
+          ),
+    );
     for (const [home, link, target] of links) {
-      if (target === dir) for (const form of spelled.get(home) ?? [home]) forms.add(join(form, basename(link)));
+      if (target === dir)
+        for (const form of spelled.get(home) ?? [home]) forms.add(join(form, basename(link)));
     }
     spelled.set(dir, [...forms]);
   }
-  return [...new Set([path, ...spelled.get(resolved)])];
+  return [...new Set([path, ...(spelled.get(resolved) ?? [])])];
 }
 
 // A transcript names a worktree up to a boundary byte or the end of the JSON
@@ -204,9 +300,11 @@ function mentions(text, needle) {
 // Git on Windows may spell a path with forward slashes while the session uses backslashes.
 /** @param {readonly string[]} spellings */
 function transcriptNeedles(spellings) {
-  const forms = spellings.flatMap((spelling) => (/^(?:[a-z]:[\\/]|\\\\|\/\/)/i.test(spelling)
-    ? [spelling.replaceAll("\\", "/"), spelling.replaceAll("/", "\\")]
-    : [spelling]));
+  const forms = spellings.flatMap((spelling) =>
+    /^(?:[a-z]:[\\/]|\\\\|\/\/)/i.test(spelling)
+      ? [spelling.replaceAll("\\", "/"), spelling.replaceAll("/", "\\")]
+      : [spelling],
+  );
   return [...new Set(forms)].map((form) => Buffer.from(JSON.stringify(form).slice(1, -1)));
 }
 
@@ -223,7 +321,8 @@ export function lastChats(roots, spellings) {
   /** @type {Map<string, number>} */
   const latest = new Map();
   for (const { path: file } of roots.flatMap((root) => candidates(root, Infinity))) {
-    let text, mtime;
+    let text;
+    let mtime;
     try {
       text = readFileSync(file);
       // A session can resume after enumeration. Its new content must use its
@@ -234,7 +333,8 @@ export function lastChats(roots, spellings) {
       continue;
     }
     for (const [path, forms] of needles) {
-      if (mtime > (latest.get(path) ?? 0) && forms.some((needle) => mentions(text, needle))) latest.set(path, mtime);
+      if (mtime > (latest.get(path) ?? 0) && forms.some((needle) => mentions(text, needle)))
+        latest.set(path, mtime);
     }
   }
   return latest;
@@ -242,27 +342,46 @@ export function lastChats(roots, spellings) {
 
 // The trunk is whatever the remote says it is; main only when it publishes no
 // usable HEAD.
+/**
+ * @param {string} repo
+ */
 function trunkName(repo) {
   const advertised = probe(() => git(repo, "ls-remote", "--symref", "origin", "HEAD"));
-  return (advertised.known && /^ref: refs\/heads\/(.+)\tHEAD$/m.exec(advertised.value)?.[1]) || "main";
+  const branch = advertised.known
+    ? /^ref: refs\/heads\/(.+)\tHEAD$/m.exec(advertised.value)?.[1]
+    : undefined;
+  return branch ?? "main";
 }
 
+/** @param {string} repo @param {string} head @param {string} trunk */
 function isAncestor(repo, head, trunk) {
   try {
     git(repo, "merge-base", "--is-ancestor", head, `origin/${trunk}`);
     return true;
   } catch (error) {
-    if (error.status === 1) return false;
+    if (error && typeof error === "object" && "status" in error && error.status === 1) return false;
     throw error;
   }
 }
 
+/**
+ * @param {string} path
+ */
 function dirtyState(path) {
-  const lines = git(path, "status", "--porcelain", "--untracked-files=all", "--ignore-submodules=none").split("\n").filter(Boolean);
+  const lines = git(
+    path,
+    "status",
+    "--porcelain",
+    "--untracked-files=all",
+    "--ignore-submodules=none",
+  )
+    .split("\n")
+    .filter(Boolean);
   const untracked = lines.filter((line) => line.startsWith("??")).length;
   return { wip: lines.length - untracked, untracked };
 }
 
+/** @param {string} path @param {string} branch @param {string | undefined} head */
 function remoteState(path, branch, head) {
   const sha = git(path, "for-each-ref", "--format=%(objectname)", `refs/remotes/origin/${branch}`);
   if (!sha) return "no-remote";
@@ -270,27 +389,43 @@ function remoteState(path, branch, head) {
   return `ahead${git(path, "rev-list", "--count", `origin/${branch}..HEAD`)}`;
 }
 
+/**
+ * @param {string} output
+ */
 export function duSize(output) {
   return output.trim().split(/\s/)[0];
 }
 
+/**
+ * @param {string} path
+ */
 function size(path) {
   try {
-    return duSize(execFileSync("du", ["-sh", path], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }));
+    return duSize(
+      execFileSync("du", ["-sh", path], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }),
+    );
   } catch {
     return "?";
   }
 }
 
 // Orders du's human-readable sizes the way `sort -h` does.
+/**
+ * @param {string} label
+ */
 function sizeKey(label) {
   const match = /^(\d+(?:\.\d+)?)([KMGTPE]?)/.exec(label);
   if (!match) return 0;
   return Number(match[1]) * 1024 ** (match[2] ? "KMGTPE".indexOf(match[2]) + 1 : 0);
 }
 
+/** @param {DirtyState} state */
 function dirtyLabel({ wip, untracked }) {
-  return [wip > 0 && `wip:${wip}`, untracked > 0 && `untracked:${untracked}`].filter(Boolean).join(",") || "clean";
+  return (
+    [wip > 0 && `wip:${wip}`, untracked > 0 && `untracked:${untracked}`]
+      .filter(Boolean)
+      .join(",") || "clean"
+  );
 }
 
 // `--porcelain -z` hands over the lock reason raw, newlines included.
@@ -300,21 +435,41 @@ function lockedLabel(locked) {
   return locked.replaceAll(/\s+/g, " ").trim() || "locked";
 }
 
-/** @param {{path: string, locked: string|null}} worktree */
+/** @param {{path: string, locked: string|null}} worktree @param {AuditContext} context */
 function auditWorktree({ path, locked }, { repo, trunk, fetched, prs, chats, now }) {
   const head = probe(() => git(path, "rev-parse", "HEAD"));
-  const age = bind(head, () => probe(() => Math.trunc((now - Number(git(path, "log", "-1", "--format=%ct", "HEAD"))) / DAY)));
+  const age = bind(head, () =>
+    probe(() => Math.trunc((now - Number(git(path, "log", "-1", "--format=%ct", "HEAD"))) / DAY)),
+  );
   const ancestry = bind(head, (sha) => probe(() => isAncestor(repo, sha, trunk)));
   const dirty = probe(() => dirtyState(path));
   const branch = probe(() => {
     const name = git(path, "rev-parse", "--abbrev-ref", "HEAD");
     return name === "HEAD" ? null : name;
   });
-  const remote = bind(branch, (name) => (name === null ? known("detached") : probe(() => remoteState(path, name, head.value))));
-  const pr = bind(prs, (list) => bind(branch, (name) => known(list.find((entry) => name !== null && entry.headRefName === name) ?? null)));
+  const remote = bind(branch, (/** @type {string | null} */ name) =>
+    name === null ? known("detached") : probe(() => remoteState(path, name, head.value)),
+  );
+  const pr = bind(prs, (list) =>
+    bind(branch, (/** @type {string | null} */ name) =>
+      known(list.find((entry) => name !== null && entry.headRefName === name) ?? null),
+    ),
+  );
   const lastChat = chats.get(path);
-  const recent = bind(lastChat, (ts) => known(ts !== null && Math.trunc((now - ts) / DAY) <= RECENT_DAYS));
-  const bucket = classify({ trunk: fetched, head, age, ancestry, dirty, remote, pr, recent, locked: known(locked) });
+  const recent = bind(lastChat, (/** @type {number | null} */ ts) =>
+    known(ts !== null && Math.trunc((now - ts) / DAY) <= RECENT_DAYS),
+  );
+  const bucket = classify({
+    trunk: fetched,
+    head,
+    age,
+    ancestry,
+    dirty,
+    remote,
+    pr,
+    recent,
+    locked: known(locked),
+  });
   return [
     size(path),
     age.known ? `${age.value}d` : "?",
@@ -322,7 +477,9 @@ function auditWorktree({ path, locked }, { repo, trunk, fetched, prs, chats, now
     dirty.known ? dirtyLabel(dirty.value) : "unknown",
     remote.known ? remote.value : "unknown",
     pr.known && pr.value ? `#${pr.value.number}/${pr.value.state}` : "-",
-    lastChat.known && lastChat.value !== null ? new Date(lastChat.value * 1000).toISOString().slice(0, 10) : "-",
+    lastChat.known && lastChat.value !== null
+      ? new Date(lastChat.value * 1000).toISOString().slice(0, 10)
+      : "-",
     bucket,
     lockedLabel(locked),
     path,
@@ -347,11 +504,21 @@ export function audit({
   warn = (line) => console.error(line),
   now = Math.floor(Date.now() / 1000),
 }) {
+  /** @template Value @param {() => Value} read @param {string} message @returns {Fact<Value>} */
   const discover = (read, message) => {
     try {
       return known(read());
     } catch (error) {
-      warn(`warn: ${message}: ${String(error.stderr ?? "").trim() || error.message}`);
+      const stderr =
+        error &&
+        typeof error === "object" &&
+        "stderr" in error &&
+        (typeof error.stderr === "string" || Buffer.isBuffer(error.stderr))
+          ? error.stderr.toString().trim()
+          : "";
+      warn(
+        `warn: ${message}: ${stderr || (error instanceof Error ? error.message : String(error))}`,
+      );
       return UNKNOWN;
     }
   };
@@ -362,20 +529,28 @@ export function audit({
     `could not fetch origin/${trunk}; merged column may be stale`,
   );
   const prs = discover(() => {
-    const list = JSON.parse(gh(GH_PR_LIST, repo));
+    const list = /** @type {unknown} */ (JSON.parse(gh(GH_PR_LIST, repo)));
     if (!Array.isArray(list)) throw new Error("gh returned JSON that is not an array");
+    if (!list.every(isPullRequest)) throw new Error("gh returned an invalid pull request record");
     return list;
   }, "gh pr list failed; PR column will be empty");
 
   const worktrees = parseWorktrees(git(repo, "worktree", "list", "--porcelain", "-z")).slice(1);
   const live = worktrees.filter((worktree) => !worktree.prunable).map((worktree) => worktree.path);
   // Worktrees share ancestors, so each directory's links are read once.
+  /** @type {Map<string, SymlinkTarget[]>} */
   const links = new Map();
-  const linksIn = (dir) => links.get(dir) ?? links.set(dir, symlinkTargets(dir)).get(dir);
-  const spellings = new Map(live.map((path) => [
-    path,
-    discover(() => pathSpellings(path, linksIn), `could not resolve the spellings of ${path}; LAST_CHAT column will be empty`),
-  ]));
+  const linksIn = (/** @type {string} */ dir) =>
+    links.get(dir) ?? links.set(dir, symlinkTargets(dir)).get(dir);
+  const spellings = new Map(
+    live.map((path) => [
+      path,
+      discover(
+        () => pathSpellings(path, linksIn),
+        `could not resolve the spellings of ${path}; LAST_CHAT column will be empty`,
+      ),
+    ]),
+  );
   const scanFailed = "transcript scan failed; LAST_CHAT column will be empty";
   const missing = discover(
     () => transcripts.filter((root) => !statSync(root, { throwIfNoEntry: false })?.isDirectory()),
@@ -385,13 +560,17 @@ export function audit({
   const found = bind(missing, (roots) => {
     for (const root of roots) warn(`warn: ${root} not found; LAST_CHAT column will be empty`);
     if (roots.length) return UNKNOWN;
-    const knownSpellings = new Map([...spellings].flatMap(([path, fact]) => fact.known ? [[path, fact.value]] : []));
+    const knownSpellings = new Map(
+      [...spellings].flatMap(([path, fact]) => (fact.known ? [[path, fact.value]] : [])),
+    );
     return discover(() => lastChats(transcripts, knownSpellings), scanFailed);
   });
-  const chats = new Map(live.map((path) => [
-    path,
-    bind(spellings.get(path), () => bind(found, (latest) => known(latest.get(path) ?? null))),
-  ]));
+  const chats = new Map(
+    live.map((path) => [
+      path,
+      bind(spellings.get(path), () => bind(found, (latest) => known(latest.get(path) ?? null))),
+    ]),
+  );
 
   const context = { repo, trunk, fetched, prs, chats, now };
   const rows = worktrees.map((worktree) =>
@@ -399,10 +578,13 @@ export function audit({
       ? ["-", "?", "-", "-", "-", "-", "-", "prunable", "-", worktree.path]
       : auditWorktree(worktree, context),
   );
-  rows.sort((a, b) => sizeKey(b[0]) - sizeKey(a[0]) || (a.join("\t") < b.join("\t") ? 1 : -1));
-  return [HEADER, ...rows].map((row) => `${row.join("\t")}\n`).join("");
+  const sorted = rows.toSorted(
+    (a, b) => sizeKey(b[0]) - sizeKey(a[0]) || (a.join("\t") < b.join("\t") ? 1 : -1),
+  );
+  return [HEADER, ...sorted].map((row) => `${row.join("\t")}\n`).join("");
 }
 
+/** @param {readonly string[]} argv */
 function main(argv) {
   const [repoArg, ...transcriptsArgs] = argv;
   const repo = probe(() => git(repoArg || process.cwd(), "rev-parse", "--show-toplevel"));
@@ -419,7 +601,7 @@ function main(argv) {
 function invokedDirectly() {
   if (!process.argv[1]) return false;
   try {
-    return fileURLToPath(import.meta.url) === realpathSync(process.argv[1]);
+    return import.meta.filename === realpathSync(process.argv[1]);
   } catch {
     return false;
   }

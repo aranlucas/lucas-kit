@@ -16,9 +16,15 @@ export function truncateUtf8(text: string, cap: number): string {
 }
 
 function header({ agent, ...record }: EndedRecord): string {
-  const lines = [`agentId: ${agent.id}`, `description: ${agent.description}`, `status: ${record.status}`, `exit code: ${record.exitCode}`];
+  const lines = [
+    `agentId: ${agent.id}`,
+    `description: ${agent.description}`,
+    `status: ${record.status}`,
+    `exit code: ${String(record.exitCode)}`,
+  ];
   if (agent.worktree) {
-    const state = record.worktreeKept === false ? "no changes; removed" : `branch ${agent.worktree.branch}`;
+    const state =
+      record.worktreeKept === false ? "no changes; removed" : `branch ${agent.worktree.branch}`;
     lines.push(`worktree: ${agent.worktree.path} (${state})`);
   }
   return lines.join("\n");
@@ -34,7 +40,7 @@ export function resultText(record: EndedRecord): string {
   return `${header(record)}\n\n${report(record)}`;
 }
 
-export function listing(records: AgentRecord[]): object[] {
+export function listing(records: AgentRecord[]) {
   return records.map(({ agent, ...r }) => ({
     id: agent.id,
     description: agent.description,
@@ -53,6 +59,11 @@ export function noticeOf(record: EndedRecord): Parameters<ExtensionAPI["sendMess
     customType: NOTICE_TYPE,
     content: `pstack agent finished.\n${header(record)}${record.outputFile ? `\nfull output: ${record.outputFile}` : ""}\n\n${report(record)}`,
     display: true,
-    details: { agentId: record.agent.id, status: record.status, exitCode: record.exitCode, outputFile: record.outputFile },
+    details: {
+      agentId: record.agent.id,
+      status: record.status,
+      exitCode: record.exitCode,
+      outputFile: record.outputFile,
+    },
   };
 }

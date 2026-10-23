@@ -2,7 +2,7 @@
 // set, otherwise the first global install under npm's root, Homebrew's, or
 // bun's, or null.
 import { execFileSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
@@ -56,8 +56,16 @@ export function findPiPackage() {
  * @param {string} name
  */
 export function piDependency(piDir, name) {
+  // pnpm links the package into its virtual store; its dependencies live
+  // beside that resolved package rather than beside the public symlink.
+  const resolved = existsSync(piDir) ? realpathSync(piDir) : piDir;
   return (
-    [join(piDir, "node_modules", name), join(piDir, "..", "..", name)].find(existsSync) ?? null
+    [
+      join(piDir, "node_modules", name),
+      join(resolved, "node_modules", name),
+      join(resolved, "..", "..", name),
+      join(piDir, "..", "..", name),
+    ].find(existsSync) ?? null
   );
 }
 

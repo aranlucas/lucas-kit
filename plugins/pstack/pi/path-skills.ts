@@ -29,7 +29,7 @@ function pathSkills(pluginRoot: string): PathSkill[] {
   const dir = join(pluginRoot, "skills");
   if (!existsSync(dir)) return [];
   const skills: PathSkill[] = [];
-  for (const name of readdirSync(dir).sort()) {
+  for (const name of readdirSync(dir).toSorted()) {
     const file = join(dir, name, "SKILL.md");
     if (!existsSync(file)) continue;
     const line = frontmatter(readFileSync(file, "utf8")).fields.get("paths");
@@ -40,15 +40,22 @@ function pathSkills(pluginRoot: string): PathSkill[] {
 
 // Claude Code loads a skill with `paths:` when a matching file is touched; Pi
 // has no such hook, so the first matching tool result carries a note instead.
-export function registerPathSkills(pi: Pick<ExtensionAPI, "on">, settings: Pick<Settings, "pluginRoot">): void {
+export function registerPathSkills(
+  pi: Pick<ExtensionAPI, "on">,
+  settings: Pick<Settings, "pluginRoot">,
+): void {
   const skills = pathSkills(settings.pluginRoot);
   const noted = new Set<string>();
   pi.on("tool_result", (event, ctx) => {
     if (!FILE_TOOLS.has(event.toolName) || event.isError) return;
     const raw = event.input.path;
     if (typeof raw !== "string") return;
-    const rel = relative(ctx.cwd, isAbsolute(raw) ? raw : resolve(ctx.cwd, raw)).split("\\").join("/");
-    const skill = skills.find((s) => !noted.has(s.name) && s.globs.some((g) => matchesGlob(rel, g)));
+    const rel = relative(ctx.cwd, isAbsolute(raw) ? raw : resolve(ctx.cwd, raw))
+      .split("\\")
+      .join("/");
+    const skill = skills.find(
+      (s) => !noted.has(s.name) && s.globs.some((g) => matchesGlob(rel, g)),
+    );
     if (!skill) return;
     noted.add(skill.name);
     const note = `pstack: ${rel} matches the ${skill.name} skill's paths. Load that skill now (read ${skill.file}) and follow it while you work on this file.`;

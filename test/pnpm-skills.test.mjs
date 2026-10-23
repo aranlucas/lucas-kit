@@ -44,6 +44,7 @@ test("the skills archive carries every resource and license without plugin runti
     const manifest = JSON.parse(readFileSync(join(packed, "package.json"), "utf8"));
     expect(manifest.name).toBe(packageName);
     expect(manifest.version).toBe(sourcePackage.version);
+    expect(manifest.engines).toEqual({ node: "26.x" });
     expect(manifest.private).toBeUndefined();
     expect(manifest.publishConfig.access).toBe("public");
     expect(readFileSync(join(packed, "README.md"))).toEqual(readFileSync(join(repoRoot, "README.md")));

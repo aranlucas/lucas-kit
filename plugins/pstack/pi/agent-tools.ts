@@ -21,9 +21,21 @@ const agentParams = Type.Object(
           "Optional model for this agent: a family name (opus, fable, sonnet, haiku) or a full provider/id. If omitted, the agent runs on the parent's model.",
       }),
     ),
-    run_in_background: Type.Optional(Type.Boolean({ description: "Return at once; a completion notice arrives when the agent exits." })),
-    isolation: Type.Optional(Type.Unsafe<"worktree">({ type: "string", enum: ["worktree"], description: "Run the agent in its own git worktree." })),
-    readonly: Type.Optional(Type.Boolean({ description: "Run the agent without the edit and write tools." })),
+    run_in_background: Type.Optional(
+      Type.Boolean({
+        description: "Return at once; a completion notice arrives when the agent exits.",
+      }),
+    ),
+    isolation: Type.Optional(
+      Type.Unsafe<"worktree">({
+        type: "string",
+        enum: ["worktree"],
+        description: "Run the agent in its own git worktree.",
+      }),
+    ),
+    readonly: Type.Optional(
+      Type.Boolean({ description: "Run the agent without the edit and write tools." }),
+    ),
   },
   { additionalProperties: false },
 );
@@ -37,7 +49,10 @@ const sendParams = Type.Object(
   { additionalProperties: false },
 );
 
-const stopParams = Type.Object({ id: Type.String({ description: "agentId (or description) of the agent to stop" }) }, { additionalProperties: false });
+const stopParams = Type.Object(
+  { id: Type.String({ description: "agentId (or description) of the agent to stop" }) },
+  { additionalProperties: false },
+);
 
 // Claude Code's background launch result, word for word.
 const BACKGROUND_NOTE =
@@ -54,7 +69,8 @@ export function registerAgentTools(pi: ExtensionAPI, runner: AgentRunner): void 
   pi.on("tool_call", (event) => {
     if (!runner.busy || event.toolName !== "bash") return;
     const { command } = event.input;
-    if (typeof command === "string" && isForegroundWait(command)) return { block: true, reason: SLEEP_BLOCKED };
+    if (typeof command === "string" && isForegroundWait(command))
+      return { block: true, reason: SLEEP_BLOCKED };
   });
   pi.registerTool({
     name: "agent",
@@ -68,13 +84,20 @@ export function registerAgentTools(pi: ExtensionAPI, runner: AgentRunner): void 
       const started = runner.start(params, ctx);
       if (params.run_in_background) {
         return {
-          content: [{ type: "text", text: `${JSON.stringify({ agentId: started.agent.id, status: "running" })}\n\n${BACKGROUND_NOTE}` }],
+          content: [
+            {
+              type: "text",
+              text: `${JSON.stringify({ agentId: started.agent.id, status: "running" })}\n\n${BACKGROUND_NOTE}`,
+            },
+          ],
           details: { agentId: started.agent.id, status: "running" },
         };
       }
       const onAbort = () => void runner.stop(started.agent.id);
       signal?.addEventListener("abort", onAbort, { once: true });
-      const record = await runner.wait(started.agent.id).finally(() => signal?.removeEventListener("abort", onAbort));
+      const record = await runner
+        .wait(started.agent.id)
+        .finally(() => signal?.removeEventListener("abort", onAbort));
       return {
         content: [{ type: "text", text: resultText(record) }],
         details: { agentId: record.agent.id, status: record.status },
@@ -106,9 +129,14 @@ export function registerAgentTools(pi: ExtensionAPI, runner: AgentRunner): void 
     description:
       "List every agent this session started with its status. running means the process is alive; completed, failed, and stopped are reported only after the process exited.",
     parameters: Type.Object({}, { additionalProperties: false }),
-    async execute() {
-      const agents = listing(runner.list());
-      return { content: [{ type: "text", text: JSON.stringify(agents, null, 2) }], details: { agents } };
+    execute() {
+      return Promise.try(() => {
+        const agents = listing(runner.list());
+        return {
+          content: [{ type: "text", text: JSON.stringify(agents, null, 2) }],
+          details: { agents },
+        };
+      });
     },
   });
 
@@ -122,7 +150,16 @@ export function registerAgentTools(pi: ExtensionAPI, runner: AgentRunner): void 
     async execute(_id, params) {
       const record = await runner.stop(params.id);
       return {
-        content: [{ type: "text", text: JSON.stringify({ agentId: record.agent.id, status: record.status, exitCode: record.exitCode }) }],
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({
+              agentId: record.agent.id,
+              status: record.status,
+              exitCode: record.exitCode,
+            }),
+          },
+        ],
         details: { agentId: record.agent.id, status: record.status },
       };
     },

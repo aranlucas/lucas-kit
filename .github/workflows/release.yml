@@ -39,7 +39,7 @@ jobs:
       - name: Set up Node.js and pnpm dependencies
         uses: pnpm/setup@a0881977cd8ea73b1ed212236c99ca10dcc80cf4 # v3.1.1
         with:
-          runtime: node@24
+          runtime: node@26
           require-lockfile: true
           cache: false
       - name: Check generated files and plugin invariants
@@ -113,7 +113,7 @@ jobs:
       - uses: pnpm/setup@a0881977cd8ea73b1ed212236c99ca10dcc80cf4 # v3.1.1
         with:
           version: ${{ needs.build.outputs.pnpm_version }}
-          runtime: node@24
+          runtime: node@26
           install: false
           cache: false
       # Staging uploads the version without releasing it. A maintainer

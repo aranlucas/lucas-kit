@@ -4,10 +4,13 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
 import { install } from "../../plugins/pstack/pi/index.ts";
-import { fakeCtx, fakePi } from "./harness.mjs";
+import { fakeCtx, fakePi, sleep } from "./harness.mjs";
 
 const [settingsJson, how] = process.argv.slice(2);
-const settings = JSON.parse(settingsJson);
+// The parent passes its typed settings directly as JSON.
+const settings = /** @type {import("../../plugins/pstack/pi/config.ts").Settings} */ (
+  JSON.parse(settingsJson)
+);
 const [, log] = settings.pi.args;
 const pi = fakePi();
 install(pi.api, settings);
@@ -17,6 +20,7 @@ await pi.call("agent", { description: "bg", prompt: "x", run_in_background: true
 // What a second pi process opening the same session would read.
 console.log(JSON.stringify(pi.entries));
 
-while (!(existsSync(log) && readFileSync(log, "utf8").includes('"grandchild"'))) await new Promise((r) => setTimeout(r, 20));
+// oxlint-disable-next-line eslint/no-await-in-loop -- Cases share fixture state or ordered assertions; finish each before starting the next.
+while (!(existsSync(log) && readFileSync(log, "utf8").includes('"grandchild"'))) await sleep(20);
 if (how === "exit") process.exit(1);
 setInterval(() => {}, 1000);

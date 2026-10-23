@@ -13,7 +13,8 @@
     "paths": {
       "@/*": ["./*"],
       "@test/*": ["./test/*"]
-    }
+    },
+    "lib": ["es2023", "esnext.promise"]
   },
   "include": [
     "*.mjs",

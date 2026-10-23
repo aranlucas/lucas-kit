@@ -695,6 +695,9 @@ describe("a discovery failure keeps an ancestor out of safe", () => {
     ["gh", () => ({ gh: () => { throw new Error("gh: not logged in"); } }), /gh pr list failed.*not logged in/],
     ["gh output that is not JSON", () => ({ gh: () => "rate limited" }), /gh pr list failed/],
     ["gh output that is not a list", () => ({ gh: () => "{}" }), /gh pr list failed/],
+    ["gh list containing null", () => ({ gh: () => "[null]" }), /gh pr list failed.*invalid pull request/],
+    ["gh list containing a scalar", () => ({ gh: () => "[7]" }), /gh pr list failed.*invalid pull request/],
+    ["gh list missing a requested field", () => ({ gh: () => '[{"number":1,"state":"MERGED","headRefName":"topic"}]' }), /gh pr list failed.*invalid pull request/],
     ["a missing transcripts directory", (fixture) => ({ transcripts: [fixture.transcripts, join(fixture.root, "absent")] }), /^warn: \S+[\\/]absent not found; LAST_CHAT column will be empty$/],
   ];
   const chmodFailures = [

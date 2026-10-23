@@ -2,6 +2,14 @@
   "$schema": "./node_modules/oxlint/configuration_schema.json",
   "extends": ["./node_modules/@aranlucas/oxforge/configs/recommended.json"],
   "ignorePatterns": [
+    // Vendored/forked Cursor pstack code: https://github.com/cursor/plugins/tree/99743e9c151c8537cbbf1f98bb38f34ef3368453/pstack/skills/poteto-mode/scripts
+    // Keep upstream tooling for these files; port-owned .mjs parsers remain linted.
+    "plugins/pstack/skills/poteto-mode/scripts/watch-pr/**",
+    "plugins/pstack/skills/poteto-mode/scripts/orch/**",
+    "plugins/pstack/skills/poteto-mode/scripts/bootstrap.ts",
+    "plugins/pstack/skills/poteto-mode/scripts/bootstrap.test.ts",
+    "plugins/pstack/skills/poteto-mode/scripts/check-plan.mjs",
+    "plugins/pstack/skills/poteto-mode/scripts/check-plan.test.ts",
     "**/node_modules/**",
     "**/dist/**",
     "**/build/**",

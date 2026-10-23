@@ -6,19 +6,39 @@ import fs from "node:fs";
 import { syncBuiltinESMExports } from "node:module";
 import { join } from "node:path";
 
-import { agentEntry, alive, flag, listAgents, recordWith, restore, sleep, useWorld, waitFor } from "@test/pi/harness.mjs";
+import {
+  agentEntry,
+  alive,
+  flag,
+  listAgents,
+  recordWith,
+  restore,
+  sleep,
+  useWorld,
+  waitFor,
+} from "@test/pi/harness.mjs";
 
 const setup = useWorld();
 
-const exitOf = (proc) => new Promise((r) => proc.on("exit", r));
+const exitOf = (/** @type {childProcess.ChildProcess} */ proc) =>
+  new Promise((resolve) => {
+    proc.on("exit", resolve);
+  });
 
 // A record's pid once another process has it: that one started at another time.
-const reusedBy = (proc) => ({ pid: proc.pid, pidStart: "another time" });
+const reusedBy = (/** @type {childProcess.ChildProcess} */ proc) => ({
+  pid: proc.pid,
+  pidStart: "another time",
+});
 
 describe("registry", () => {
   test("list_agents survives a reload through the persisted entries", async () => {
     const { w, pi, ctx } = setup();
-    const { details } = await pi.call("agent", { description: "remember me", prompt: "x", model: "haiku" }, ctx);
+    const { details } = await pi.call(
+      "agent",
+      { description: "remember me", prompt: "x", model: "haiku" },
+      ctx,
+    );
 
     const reloaded = await restore(w, pi.entries, "reload");
     const [listed] = await listAgents(reloaded, ctx);
@@ -43,7 +63,10 @@ describe("registry", () => {
     const stranger = w.spawn("sleep", ["30"], { detached: true });
     const last = pi.entries.at(-1);
     assert.ok(last);
-    const entries = [...pi.entries, agentEntry(recordWith(last.data, { agent: { id: "astranger" }, ...reusedBy(stranger) }))];
+    const entries = [
+      ...pi.entries,
+      agentEntry(recordWith(last.data, { agent: { id: "astranger" }, ...reusedBy(stranger) })),
+    ];
 
     const resumed = await restore(w, entries);
     await waitFor(() => w.log().every((r) => !alive(r.pid)));
@@ -58,17 +81,31 @@ describe("registry", () => {
     const leader = w.spawn("sh", ["-c", "sleep 300 & exec sleep 0.1"], { detached: true });
     const parent = w.spawn("sleep", ["0.1"]);
     await Promise.all([exitOf(leader), exitOf(parent)]);
-    const member = await new Promise((r) => {
+    /** @type {Promise<number>} */
+    const memberPid = new Promise((resolve) => {
       let out = "";
-      const p = w.spawn("pgrep", ["-g", String(leader.pid)], { stdio: ["ignore", "pipe", "ignore"] });
+      const p = w.spawn("pgrep", ["-g", String(leader.pid)], {
+        stdio: ["ignore", "pipe", "ignore"],
+      });
       assert.ok(p.stdout);
       p.stdout.on("data", (d) => (out += d));
-      p.on("exit", () => r(Number(out.trim().split("\n")[0])));
+      p.on("exit", () => resolve(Number(out.trim().split("\n")[0])));
     });
+    const member = await memberPid;
     expect(alive(member)).toBe(true);
     const first = pi.entries.at(0);
     assert.ok(first);
-    const entries = [...pi.entries, agentEntry(recordWith(first.data, { agent: { id: "agroup" }, status: "running", pid: leader.pid, parentPid: parent.pid }))];
+    const entries = [
+      ...pi.entries,
+      agentEntry(
+        recordWith(first.data, {
+          agent: { id: "agroup" },
+          status: "running",
+          pid: leader.pid,
+          parentPid: parent.pid,
+        }),
+      ),
+    ];
 
     await restore(w, entries);
     await sleep(2 * w.settings.killGraceMs);
@@ -80,6 +117,7 @@ describe("registry", () => {
     const { details } = await pi.call("agent", { description: "sound", prompt: "x" }, ctx);
     const last = pi.entries.at(-1);
     assert.ok(last);
+    const { agent: oldAgent, ...oldState } = last.data;
     const bad = [
       { agent: { id: "anoparent" }, status: "running", pid: 1 },
       { agent: { id: 7 }, status: "completed" },
@@ -87,7 +125,7 @@ describe("registry", () => {
       recordWith(last.data, { agent: { id: "anoexit" }, exitCode: "0" }),
       recordWith(last.data, { agent: { id: "anosession", sessionId: "" } }),
       // The shape before identity moved under `agent`.
-      (({ agent, ...state }) => ({ ...agent, ...state, id: "aflat" }))(last.data),
+      { ...oldAgent, ...oldState, id: "aflat" },
       "garbage",
       null,
     ];
@@ -100,27 +138,38 @@ describe("registry", () => {
   // The other pi: a second process that starts a background agent and prints
   // the entries a pi process opening the same session would read.
   async function otherPi(options = {}) {
-    const { w, ctx } = setup({ script: { default: [{ spawn: "running" }, { sleep: 30000 }] }, ...options });
-    const host = w.spawn(process.execPath, ["--experimental-transform-types", join(import.meta.dirname, "host.mjs"), JSON.stringify(w.settings), "stay"], {
-      stdio: ["ignore", "pipe", "inherit"],
+    const { w, ctx } = setup({
+      script: { default: [{ spawn: "running" }, { sleep: 30000 }] },
+      ...options,
     });
+    const host = w.spawn(
+      process.execPath,
+      [join(import.meta.dirname, "host.mjs"), JSON.stringify(w.settings), "stay"],
+      {
+        stdio: ["ignore", "pipe", "inherit"],
+      },
+    );
     let printed = "";
     assert.ok(host.stdout);
     host.stdout.on("data", (d) => (printed += d));
     await w.until("grandchild");
     await waitFor(() => printed.includes("\n"));
-    /** @type {unknown} */
-    const entries = JSON.parse(printed);
+    // host.mjs serializes fakePi().entries from this same fixture.
+    const entries = /** @type {import("./harness.mjs").CapturedEntry[]} */ (JSON.parse(printed));
     assert.ok(Array.isArray(entries));
 
     return { w, ctx, host, entries };
   }
 
   test("an orphan cannot resume its session while its process awaits SIGKILL", async () => {
-    const { w, ctx, host, entries } = await otherPi({ script: { byPrompt: {
-      x: [{ ignoreSigterm: true }, { spawn: "running" }, { sleep: 30000 }],
-      again: [{ reply: "resumed" }],
-    } } });
+    const { w, ctx, host, entries } = await otherPi({
+      script: {
+        byPrompt: {
+          x: [{ ignoreSigterm: true }, { spawn: "running" }, { sleep: 30000 }],
+          again: [{ reply: "resumed" }],
+        },
+      },
+    });
     const [first] = w.invocations();
     const exited = exitOf(host);
     host.kill("SIGKILL");
@@ -130,13 +179,15 @@ describe("registry", () => {
 
     expect(alive(first.pid)).toBe(true);
     expect((await listAgents(resumed, ctx))[0].status).toBe("running");
-    await expect(resumed.call("send_message", { to: id, message: "again" }, ctx)).rejects.toThrow(/process.*has not exited/);
+    await expect(resumed.call("send_message", { to: id, message: "again" }, ctx)).rejects.toThrow(
+      /process.*has not exited/,
+    );
     expect(w.invocations()).toHaveLength(1);
     await waitFor(() => !alive(first.pid));
     expect((await listAgents(resumed, ctx))[0].status).toBe("stopped");
 
     await resumed.call("send_message", { to: id, message: "again" }, ctx);
-    await waitFor(() => resumed.messages.length === 1);
+    await waitFor(() => resumed?.messages.length === 1);
     const second = w.invocations()[1];
     expect(flag(second, "--session-id")).toBe(flag(first, "--session-id"));
     expect(second.cwd).toBe(first.cwd);
@@ -157,7 +208,10 @@ describe("registry", () => {
     for (const [tool, params] of [
       ["send_message", { to: id, message: "again" }],
       ["stop_agent", { id }],
-    ]) await expect(resumed.call(tool, params, ctx)).rejects.toThrow(/process.*has not exited/);
+    ]) {
+      // oxlint-disable-next-line eslint/no-await-in-loop -- Both tools inspect the same running orphan before it exits.
+      await expect(resumed.call(tool, params, ctx)).rejects.toThrow(/process.*has not exited/);
+    }
     await sleep(2 * w.settings.killGraceMs);
     expect(alive(first.pid)).toBe(true);
     expect(w.invocations()).toHaveLength(1);
@@ -171,75 +225,110 @@ describe("registry", () => {
     await resumed.emit("session_shutdown", {}, ctx);
   });
 
-  for (const failure of ["restore", "escalation"]) test(`an orphan recovers from failed inspection at ${failure}, and resumes only after exit`, async () => {
-    const { w, ctx, host, entries } = await otherPi({ script: { byPrompt: {
-      x: [{ ignoreSigterm: true }, { spawn: "running" }, { sleep: 30000 }],
-      again: [{ reply: "resumed" }],
-    } } });
-    const [first] = w.invocations();
-    expect(entries[0].data.pidStart).toBeTypeOf("string");
-    const id = entries[0].data.agent.id;
-    const exited = exitOf(host);
-    host.kill("SIGKILL");
-    await exited;
-    let resumed;
-    if (failure === "escalation") {
-      resumed = await restore(w, entries);
-      await w.until("sigterm-ignored");
-    }
+  for (const failure of ["restore", "escalation"])
+    test(`an orphan recovers from failed inspection at ${failure}, and resumes only after exit`, async () => {
+      const { w, ctx, host, entries } = await otherPi({
+        script: {
+          byPrompt: {
+            x: [{ ignoreSigterm: true }, { spawn: "running" }, { sleep: 30000 }],
+            again: [{ reply: "resumed" }],
+          },
+        },
+      });
+      const [first] = w.invocations();
+      expect(entries[0].data.pidStart).toBeTypeOf("string");
+      const id = entries[0].data.agent.id;
+      const exited = exitOf(host);
+      host.kill("SIGKILL");
+      await exited;
+      /** @type {import("./harness.mjs").FakePi | undefined} */
+      let resumed;
+      if (failure === "escalation") {
+        resumed = await restore(w, entries);
+        await w.until("sigterm-ignored");
+      }
 
-    // Fail both process-inspection APIs while leaving the real child running.
-    const readFile = fs.readFileSync;
-    const spawn = childProcess.spawnSync;
-    const proc = vi.spyOn(fs, "readFileSync").mockImplementation((path, ...args) => {
-      if (path === `/proc/${first.pid}/stat`) throw Object.assign(new Error("inspection unavailable"), { code: "EACCES" });
-      return readFile(path, ...args);
-    });
-    const ps = vi.spyOn(childProcess, "spawnSync").mockImplementation((command, args, ...options) =>
-      command === "ps" && args.includes(String(first.pid)) ? { status: 1, stdout: "" } : spawn(command, args, ...options),
-    );
-    syncBuiltinESMExports();
-    try {
-      if (failure === "restore") resumed = await restore(w, entries);
-      else await sleep(2 * w.settings.killGraceMs);
-      assert.ok(resumed);
-      expect((await listAgents(resumed, ctx))[0].status).toBe("running");
-      await expect(resumed.call("send_message", { to: id, message: "again" }, ctx)).rejects.toThrow(/process.*has not exited/);
-      expect(alive(first.pid)).toBe(true);
-    } finally {
-      proc.mockRestore();
-      ps.mockRestore();
+      // Fail both process-inspection APIs while leaving the real child running.
+      const readFile = fs.readFileSync;
+      const spawn = childProcess.spawnSync;
+      const proc = vi.spyOn(fs, "readFileSync").mockImplementation((path, ...args) => {
+        if (path === `/proc/${first.pid}/stat`)
+          throw Object.assign(new Error("inspection unavailable"), { code: "EACCES" });
+        return readFile(path, ...args);
+      });
+      const ps = vi
+        .spyOn(childProcess, "spawnSync")
+        .mockImplementation((command, args, ...options) =>
+          command === "ps" && args.includes(String(first.pid))
+            ? { status: 1, stdout: "" }
+            : spawn(command, args, ...options),
+        );
       syncBuiltinESMExports();
-    }
+      try {
+        if (failure === "restore") resumed = await restore(w, entries);
+        else await sleep(2 * w.settings.killGraceMs);
+        assert.ok(resumed);
+        expect((await listAgents(resumed, ctx))[0].status).toBe("running");
+        await expect(
+          resumed.call("send_message", { to: id, message: "again" }, ctx),
+        ).rejects.toThrow(/process.*has not exited/);
+        expect(alive(first.pid)).toBe(true);
+      } finally {
+        proc.mockRestore();
+        ps.mockRestore();
+        syncBuiltinESMExports();
+      }
 
-    expect((await listAgents(resumed, ctx))[0].status).toBe("running");
-    await expect(resumed.call("stop_agent", { id }, ctx)).rejects.toThrow(/process.*has not exited/);
-    await expect(resumed.call("send_message", { to: id, message: "again" }, ctx)).rejects.toThrow(/process.*has not exited/);
-    expect(w.invocations()).toHaveLength(1);
-    await waitFor(() => !alive(first.pid));
-    expect(w.logged("sigterm-ignored")).toHaveLength(failure === "restore" ? 1 : 2);
-    expect((await listAgents(resumed, ctx))[0].status).toBe("stopped");
+      expect((await listAgents(resumed, ctx))[0].status).toBe("running");
+      await expect(resumed.call("stop_agent", { id }, ctx)).rejects.toThrow(
+        /process.*has not exited/,
+      );
+      await expect(resumed.call("send_message", { to: id, message: "again" }, ctx)).rejects.toThrow(
+        /process.*has not exited/,
+      );
+      expect(w.invocations()).toHaveLength(1);
+      await waitFor(() => !alive(first.pid));
+      expect(w.logged("sigterm-ignored")).toHaveLength(failure === "restore" ? 1 : 2);
+      expect((await listAgents(resumed, ctx))[0].status).toBe("stopped");
 
-    await resumed.call("send_message", { to: id, message: "again" }, ctx);
-    await waitFor(() => resumed.messages.length === 1);
-    expect(flag(w.invocations()[1], "--session-id")).toBe(flag(first, "--session-id"));
-  });
+      await resumed.call("send_message", { to: id, message: "again" }, ctx);
+      await waitFor(() => resumed?.messages.length === 1);
+      expect(flag(w.invocations()[1], "--session-id")).toBe(flag(first, "--session-id"));
+    });
 
-  for (const [what, edit, env, status] of [
+  /** @typedef {[string, (data: import("./harness.mjs").CapturedAgentRecord) => unknown, NodeJS.ProcessEnv, "running" | "stopped"]} RestorationCase */
+  /** @type {RestorationCase[]} */
+  const restorationCases = [
     ["is left running, untouched", (data) => data, {}, "running"],
-    ["is left running on a record an earlier version wrote, which has no start time", ({ pidStart: _pidStart, ...data }) => data, {}, "running"],
+    [
+      "is left running on a record an earlier version wrote, which has no start time",
+      ({ pidStart: _pidStart, ...data }) => data,
+      {},
+      "running",
+    ],
     ["is left running when ps cannot be run", (data) => data, { PATH: "/nonexistent" }, "running"],
-    ["is stopped, and that process left alone, when it started at another time than the record's", (data) => ({ ...data, pidStart: "another time" }), {}, "stopped"],
-  ]) {
+    [
+      "is stopped, and that process left alone, when it started at another time than the record's",
+      (data) => ({ ...data, pidStart: "another time" }),
+      {},
+      "stopped",
+    ],
+  ];
+  for (const [what, edit, env, status] of restorationCases) {
     test(`a restored agent whose process is a child of the live pi process that launched it ${what}`, async () => {
       const { w, ctx, entries } = await otherPi();
       const path = process.env.PATH;
       Object.assign(process.env, env);
-      const resumed = await restore(w, entries.map((e) => agentEntry(edit(e.data)))).finally(() => (process.env.PATH = path));
+      const resumed = await restore(
+        w,
+        entries.map((e) => agentEntry(edit(e.data))),
+      ).finally(() => (process.env.PATH = path));
       await sleep(500);
       expect(alive(w.invocations()[0].pid)).toBe(true);
       expect((await listAgents(resumed, ctx))[0].status).toBe(status);
-      expect(resumed.entries.map((e) => e.data.status)).toEqual(status === "running" ? [] : [status]);
+      expect(resumed.entries.map((e) => e.data.status)).toEqual(
+        status === "running" ? [] : [status],
+      );
     });
   }
 
@@ -261,7 +350,10 @@ describe("registry", () => {
     await w.until("invocation");
     const reusedParent = w.spawn("sleep", ["30"], { detached: true });
 
-    const resumed = await restore(w, pi.entries.map((e) => agentEntry(recordWith(e.data, { parentPid: reusedParent.pid }))));
+    const resumed = await restore(
+      w,
+      pi.entries.map((e) => agentEntry(recordWith(e.data, { parentPid: reusedParent.pid }))),
+    );
     await waitFor(() => !alive(w.invocations()[0].pid));
     expect((await listAgents(resumed, ctx))[0].status).toBe("stopped");
     expect(alive(reusedParent.pid)).toBe(true);
@@ -272,10 +364,14 @@ describe("registry", () => {
     const id = entries[0].data.agent.id;
 
     const resumed = await restore(w, entries);
-    const sent = await resumed.call("send_message", { to: id, message: "more" }, ctx).catch((e) => e);
-    const stopped = await resumed.call("stop_agent", { id }, ctx).catch((e) => e);
+    const sent = await resumed
+      .call("send_message", { to: id, message: "more" }, ctx)
+      .catch((/** @type {unknown} */ error) => error);
+    const stopped = await resumed
+      .call("stop_agent", { id }, ctx)
+      .catch((/** @type {unknown} */ error) => error);
     for (const err of [sent, stopped]) {
-      expect(err).toBeInstanceOf(Error);
+      assert.ok(err instanceof Error);
       expect(err.message).toContain(String(liveParent.pid));
     }
     expect(w.invocations()).toHaveLength(1);
@@ -291,14 +387,28 @@ describe("registry", () => {
     await exitOf(gone);
     const first = pi.entries.at(0);
     assert.ok(first);
-    const entries = Object.entries({ agone: { pid: gone.pid }, areused: reusedBy(stranger) }).map(([id, process]) =>
-      agentEntry(recordWith(first.data, { agent: { id }, status: "running", ...process, parentPid: reusedParent.pid })),
+    const entries = Object.entries({ agone: { pid: gone.pid }, areused: reusedBy(stranger) }).map(
+      ([id, process]) =>
+        agentEntry(
+          recordWith(first.data, {
+            agent: { id },
+            status: "running",
+            ...process,
+            parentPid: reusedParent.pid,
+          }),
+        ),
     );
 
     const resumed = await restore(w, entries);
-    expect((await listAgents(resumed, ctx)).map((a) => [a.id, a.status])).toEqual([["agone", "stopped"], ["areused", "stopped"]]);
+    expect((await listAgents(resumed, ctx)).map((a) => [a.id, a.status])).toEqual([
+      ["agone", "stopped"],
+      ["areused", "stopped"],
+    ]);
     expect(resumed.entries.map((e) => e.data.status)).toEqual(["stopped", "stopped"]);
-    expect((await resumed.call("stop_agent", { id: "agone" }, ctx)).details).toEqual({ agentId: "agone", status: "stopped" });
+    expect((await resumed.call("stop_agent", { id: "agone" }, ctx)).details).toEqual({
+      agentId: "agone",
+      status: "stopped",
+    });
     await sleep(2 * w.settings.killGraceMs);
     expect([reusedParent.pid, stranger.pid].map(alive)).toEqual([true, true]);
   });
@@ -323,9 +433,13 @@ describe("registry", () => {
   for (const how of ["exit", "SIGINT"]) {
     test(`a print-mode parent that ends by ${how} takes its running agents with it`, async () => {
       const { w } = setup({ script: { default: [{ spawn: "running" }, { sleep: 30000 }] } });
-      const host = w.spawn(process.execPath, ["--experimental-transform-types", join(import.meta.dirname, "host.mjs"), JSON.stringify(w.settings), how], {
-        stdio: ["ignore", "pipe", "inherit"],
-      });
+      const host = w.spawn(
+        process.execPath,
+        [join(import.meta.dirname, "host.mjs"), JSON.stringify(w.settings), how],
+        {
+          stdio: ["ignore", "pipe", "inherit"],
+        },
+      );
       const exited = exitOf(host);
       await w.until("grandchild");
       if (how === "SIGINT") host.kill("SIGINT");
@@ -338,11 +452,17 @@ describe("registry", () => {
 
 // Plays Pi's settle loop: a follow-up queued during agent_before_settle starts
 // another turn, and a settle that queues nothing ends the run.
+/** @param {import("./harness.mjs").FakePi} pi @param {import("./harness.mjs").FakeCtx} ctx */
 async function settleLoop(pi, ctx) {
   const turns = [];
   for (let i = 0; i < 5; i++) {
     const before = pi.messages.length;
-    await pi.emit("agent_before_settle", { entries: [], continue: false, outcome: "completed" }, ctx);
+    // oxlint-disable-next-line eslint/no-await-in-loop -- Cases share fixture state or ordered assertions; finish each before starting the next.
+    await pi.emit(
+      "agent_before_settle",
+      { entries: [], continue: false, outcome: "completed" },
+      ctx,
+    );
     const queued = pi.messages.slice(before);
     if (!queued.length) return turns;
     turns.push(queued);
@@ -354,15 +474,35 @@ describe("non-interactive settle", () => {
   for (const mode of ["json", "print"]) {
     test(`in ${mode} mode the run settles only after every background agent's notice has run as a turn`, async () => {
       const { pi, ctx } = setup({
-        script: { byPrompt: { fast: [{ sleep: 150 }, { reply: "fast done" }], slow: [{ sleep: 700 }, { reply: "slow done" }] } },
+        script: {
+          byPrompt: {
+            fast: [{ sleep: 150 }, { reply: "fast done" }],
+            slow: [{ sleep: 700 }, { reply: "slow done" }],
+          },
+        },
         ctx: { mode },
       });
-      const fast = (await pi.call("agent", { description: "fast", prompt: "fast", run_in_background: true }, ctx)).details.agentId;
-      const slow = (await pi.call("agent", { description: "slow", prompt: "slow", run_in_background: true }, ctx)).details.agentId;
+      const fast = (
+        await pi.call(
+          "agent",
+          { description: "fast", prompt: "fast", run_in_background: true },
+          ctx,
+        )
+      ).details.agentId;
+      const slow = (
+        await pi.call(
+          "agent",
+          { description: "slow", prompt: "slow", run_in_background: true },
+          ctx,
+        )
+      ).details.agentId;
 
       const turns = await settleLoop(pi, ctx);
 
-      expect(turns.map((t) => t.map(({ message }) => message.details.agentId))).toEqual([[fast], [slow]]);
+      expect(turns.map((t) => t.map(({ message }) => message.details.agentId))).toEqual([
+        [fast],
+        [slow],
+      ]);
       for (const [{ message, options }] of turns) {
         expect(message.customType).toBe("pstack-agent");
         expect(options).toEqual({ triggerTurn: true, deliverAs: "steer" });
@@ -383,7 +523,11 @@ describe("non-interactive settle", () => {
   }
 
   test("a child agent (rpc, depth 1) holds its settle for its own background agents, since its parent closes stdin once it settles", async () => {
-    const { pi, ctx } = setup({ script: { default: [{ sleep: 150 }, { reply: "grandchild done" }] }, settings: { depth: 1 }, ctx: { mode: "rpc" } });
+    const { pi, ctx } = setup({
+      script: { default: [{ sleep: 150 }, { reply: "grandchild done" }] },
+      settings: { depth: 1 },
+      ctx: { mode: "rpc" },
+    });
     await pi.call("agent", { description: "g", prompt: "x", run_in_background: true }, ctx);
     const turns = await settleLoop(pi, ctx);
     expect(turns).toHaveLength(1);
@@ -392,11 +536,17 @@ describe("non-interactive settle", () => {
 
   test("a message from the parent ends a child's settle hold while its background agent still runs", async () => {
     let pending = false;
-    const { pi, ctx } = setup({ script: { default: [{ sleep: 5000 }] }, settings: { depth: 1 }, ctx: { mode: "rpc", pending: () => pending } });
+    const { pi, ctx } = setup({
+      script: { default: [{ sleep: 5000 }] },
+      settings: { depth: 1 },
+      ctx: { mode: "rpc", pending: () => pending },
+    });
     await pi.call("agent", { description: "long", prompt: "x", run_in_background: true }, ctx);
 
     let released = false;
-    const hold = pi.emit("agent_before_settle", { entries: [], continue: false, outcome: "completed" }, ctx).then(() => (released = true));
+    const hold = pi
+      .emit("agent_before_settle", { entries: [], continue: false, outcome: "completed" }, ctx)
+      .then(() => (released = true));
     await sleep(300);
     expect(released).toBe(false);
     pending = true;

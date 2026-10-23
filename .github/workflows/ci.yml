@@ -30,14 +30,19 @@ jobs:
       - name: Set up Node.js and pnpm dependencies
         uses: pnpm/setup@a0881977cd8ea73b1ed212236c99ca10dcc80cf4 # v3.1.1
         with:
-          runtime: node@24
+          runtime: node@26
           require-lockfile: true
+      - name: Lint first-party runtime code and Pi session fixtures
+        run: pnpm lint:runtime
       - name: Check generated files and plugin invariants
         run: pnpm generate:check
       - name: Tool and invariant fixture tests
         run: pnpm test
         env:
           PSTACK_REQUIRE_PNPM_SKILLS: "1"
+          PI_PACKAGE_DIR: ${{ github.workspace }}/node_modules/@earendil-works/pi-coding-agent
+          PSTACK_PI_REQUIRE_CATALOG: "1"
+          PSTACK_PI_REQUIRE_RUNTIME: "1"
 
   forks:
     name: Fork registry
@@ -51,7 +56,7 @@ jobs:
       - name: Set up Node.js and pnpm dependencies
         uses: pnpm/setup@a0881977cd8ea73b1ed212236c99ca10dcc80cf4 # v3.1.1
         with:
-          runtime: node@24
+          runtime: node@26
           require-lockfile: true
       # A dry-run sync to the SHA already pinned compares the port with
       # upstream as it stands, and fails on a fork tools/forks.json lacks or
@@ -110,7 +115,7 @@ jobs:
       - name: Set up Node.js and pnpm
         uses: pnpm/setup@a0881977cd8ea73b1ed212236c99ca10dcc80cf4 # v3.1.1
         with:
-          runtime: node@24
+          runtime: node@26
           install: false
       - name: Install the skills tree with the skills CLI
         run: |
@@ -131,7 +136,7 @@ jobs:
       - name: Set up Node.js and pnpm dependencies
         uses: pnpm/setup@a0881977cd8ea73b1ed212236c99ca10dcc80cf4 # v3.1.1
         with:
-          runtime: node@24
+          runtime: node@26
           require-lockfile: true
       # Test the pinned Pi release outside the project dependency graph.
       # Convert the publication cutoff to pnpm's minimum release age. Add
@@ -172,7 +177,7 @@ jobs:
       - name: Set up Node.js and pnpm dependencies
         uses: pnpm/setup@a0881977cd8ea73b1ed212236c99ca10dcc80cf4 # v3.1.1
         with:
-          runtime: node@24
+          runtime: node@26
           working-directory: plugins/pstack/skills/poteto-mode/scripts
           require-lockfile: true
       - name: Typecheck
@@ -215,7 +220,7 @@ jobs:
       - name: Set up Node.js and pnpm
         uses: pnpm/setup@a0881977cd8ea73b1ed212236c99ca10dcc80cf4 # v3.1.1
         with:
-          runtime: node@24
+          runtime: node@26
           install: false
       - name: Run markdownlint
         run: pnpm dlx markdownlint-cli2@0.18.1 '**/*.md'

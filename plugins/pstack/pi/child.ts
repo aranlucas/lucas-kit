@@ -5,6 +5,10 @@ import type { RpcCommand } from "@earendil-works/pi-coding-agent";
 import { type Static, Type } from "typebox";
 import { Value } from "typebox/value";
 
+type ChildOptions = { cwd: string; exitGraceMs: number };
+
+type SteerResult = { response: Answer | undefined; taken: boolean };
+
 const STDERR_CAP = 8 * 1024;
 const CLOSE_AFTER_EXIT_MS = 2000;
 
@@ -82,12 +86,7 @@ export class PiChild {
   private errorMessage = "";
   private stderr = "";
 
-  constructor(
-    command: string,
-    args: string[],
-    opts: { cwd: string; exitGraceMs: number },
-    prompt: string,
-  ) {
+  constructor(command: string, args: string[], opts: ChildOptions, prompt: string) {
     this.exitGraceMs = opts.exitGraceMs;
     this.proc = spawn(command, args, {
       cwd: opts.cwd,
@@ -139,33 +138,42 @@ export class PiChild {
         finish();
       });
     });
-    void this.command({ type: "prompt", message: prompt }).then((response) => {
-      if (!response) return;
-      if (!response.success) this.errorMessage = response.error ?? "pi rejected the prompt";
-      else if (Value.Check(handledPrompt, response)) {
-        this.errorMessage =
-          "pi consumed the prompt as an extension command, so no agent run started. Send the task as plain text.";
-      } else return;
-      this.close();
-    });
+    /* oxlint-disable promise/always-return -- This continuation only records the response and closes stdin. */
+    void this.command({ type: "prompt", message: prompt })
+      .then((response) => {
+        if (!response) return;
+        if (!response.success) this.errorMessage = response.error ?? "pi rejected the prompt";
+        else if (Value.Check(handledPrompt, response)) {
+          this.errorMessage =
+            "pi consumed the prompt as an extension command, so no agent run started. Send the task as plain text.";
+        } else return;
+        this.close();
+      })
+      .catch((error: unknown) => {
+        this.errorMessage = error instanceof Error ? error.message : String(error);
+        this.close();
+      });
+    /* oxlint-enable promise/always-return */
   }
 
   // Resolves with pi's response, or undefined when stdin is closed or the
   // process exits first.
   command(command: RpcCommand): Promise<Answer | undefined> {
-    return new Promise((resolve) => this.send(command, resolve));
+    return new Promise((resolve) => {
+      this.send(command, resolve);
+    });
   }
 
   // Pi answers a steer it reads after settling with "queued" and never runs
   // it, since it exits on EOF. So a steer was taken into the run only when the
   // run had not settled as its response was read, which is when `taken` is
   // decided: the settle can follow in the same chunk of output.
-  steer(message: string): Promise<{ response: Answer | undefined; taken: boolean }> {
-    return new Promise((resolve) =>
+  steer(message: string): Promise<SteerResult> {
+    return new Promise((resolve) => {
       this.send({ type: "steer", message }, (response) =>
         resolve({ response, taken: response?.success === true && !this.settled }),
-      ),
-    );
+      );
+    });
   }
 
   private send(command: RpcCommand, onResponse: (response: Answer | undefined) => void): void {
@@ -199,7 +207,9 @@ export class PiChild {
   }
 
   private terminate(graceMs: number): void {
-    if (this.pid) terminateGroup(this.pid, () => this.running, graceMs);
+    // terminateGroup only resolves; the getter and signalGroup cannot throw.
+    // oxlint-disable-next-line typescript/no-floating-promises -- Cleanup must continue without waiting for the grace timer.
+    if (this.pid) void terminateGroup(this.pid, () => this.running, graceMs);
   }
 
   // Signals the child's group only while the child itself is alive: once it

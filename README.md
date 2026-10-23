@@ -6,7 +6,7 @@ These workflows require **T3 Code's MCP tools**. pnpm manages installation and a
 
 ## Install
 
-Use **pnpm 12.11.0 or newer**. In your project's `pnpm-workspace.yaml`, choose where pnpm should install the skills:
+Use **Node.js 26** and **pnpm 12.11.0 or newer**. In your project's `pnpm-workspace.yaml`, choose where pnpm should install the skills:
 
 ```yaml
 skills:
@@ -27,7 +27,7 @@ Select the skills capability for `@aranlucas/kit-skills` in the approval prompt.
 
 ```yaml
 permissions:
-  '@aranlucas/kit-skills':
+  "@aranlucas/kit-skills":
     skills: true
 ```
 

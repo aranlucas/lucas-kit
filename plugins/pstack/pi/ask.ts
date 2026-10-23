@@ -3,30 +3,47 @@ import { type Static, Type } from "typebox";
 
 import type { OneShot } from "./one-shot.ts";
 
+type QuestionAnswer = { question: string; answer: string };
+
 export const OTHER = "Other (type an answer)";
 export const DONE = "Done";
 
-const question = Type.Object(
-  {
-    question: Type.String({ description: "The complete question to ask the user" }),
-    header: Type.Optional(Type.String({ description: "Very short label for the question (max 12 chars)" })),
-    options: Type.Array(Type.Object({ label: Type.String(), description: Type.Optional(Type.String()) }), { minItems: 2, maxItems: 4 }),
-    multiSelect: Type.Optional(Type.Boolean({ description: "Allow more than one answer" })),
-  },
-);
+const question = Type.Object({
+  question: Type.String({ description: "The complete question to ask the user" }),
+  header: Type.Optional(
+    Type.String({ description: "Very short label for the question (max 12 chars)" }),
+  ),
+  options: Type.Array(
+    Type.Object({ label: Type.String(), description: Type.Optional(Type.String()) }),
+    { minItems: 2, maxItems: 4 },
+  ),
+  multiSelect: Type.Optional(Type.Boolean({ description: "Allow more than one answer" })),
+});
 type Question = Static<typeof question>;
-const questionParams = Type.Object({ questions: Type.Array(question, { minItems: 1, maxItems: 4 }) });
+const questionParams = Type.Object({
+  questions: Type.Array(question, { minItems: 1, maxItems: 4 }),
+});
 
 type Ui = ExtensionContext["ui"];
 
 // undefined means the user dismissed the dialog.
-async function ask(ui: Ui, q: Question, signal: AbortSignal | undefined): Promise<string | undefined> {
+async function ask(
+  ui: Ui,
+  q: Question,
+  signal: AbortSignal | undefined,
+): Promise<string | undefined> {
   const title = q.header ? `${q.header}: ${q.question}` : q.question;
   // Pi returns the displayed string, so number choices to distinguish them
   // from controls and from other choices with the same rendered text.
-  const labels = new Map(q.options.map((o, i) => [`${i + 1}. ${o.label}${o.description ? ` - ${o.description}` : ""}`, o.label]));
+  const labels = new Map(
+    q.options.map((o, i) => [
+      `${i + 1}. ${o.label}${o.description ? ` - ${o.description}` : ""}`,
+      o.label,
+    ]),
+  );
   // The label of a listed pick, or what the user types for OTHER.
-  const answer = (pick: string) => (pick === OTHER ? ui.input(title, "Your answer", { signal }) : labels.get(pick));
+  const answer = (pick: string) =>
+    pick === OTHER ? ui.input(title, "Your answer", { signal }) : labels.get(pick);
   if (!q.multiSelect) {
     const pick = await ui.select(title, [...labels.keys(), OTHER], { signal });
     return pick === undefined ? undefined : answer(pick);
@@ -35,9 +52,15 @@ async function ask(ui: Ui, q: Question, signal: AbortSignal | undefined): Promis
   const chosen: string[] = [];
   for (;;) {
     const remaining = [...labels.keys()].filter((text) => !picked.has(text));
-    const pick = await ui.select(`${title} (one at a time; ${DONE} when finished)`, [...remaining, OTHER, DONE], { signal });
+    // oxlint-disable-next-line eslint/no-await-in-loop -- Each dialog depends on the previous answer and must be shown in order.
+    const pick = await ui.select(
+      `${title} (one at a time; ${DONE} when finished)`,
+      [...remaining, OTHER, DONE],
+      { signal },
+    );
     if (pick === undefined) return undefined;
     if (pick === DONE) return chosen.join(", ");
+    // oxlint-disable-next-line eslint/no-await-in-loop -- Each dialog depends on the previous answer and must be shown in order.
     const text = await answer(pick);
     if (text === undefined) return undefined;
     picked.add(pick);
@@ -63,8 +86,9 @@ export function registerAsk(pi: ExtensionAPI, oneShot: OneShot): void {
           "ask_user_question needs an interactive UI, and this session has none. Ask the user in plain text instead and wait for the reply.",
         );
       }
-      const answers: { question: string; answer: string }[] = [];
+      const answers: QuestionAnswer[] = [];
       for (const q of params.questions) {
+        // oxlint-disable-next-line eslint/no-await-in-loop -- Each dialog depends on the previous answer and must be shown in order.
         const answer = await ask(ctx.ui, q, signal);
         if (answer === undefined) break;
         answers.push({ question: q.question, answer });

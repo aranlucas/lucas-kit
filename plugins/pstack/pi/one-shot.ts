@@ -3,6 +3,8 @@ import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-a
 import type { AgentRunner } from "./agents.ts";
 import type { Settings } from "./config.ts";
 
+type SettleSignal = { done: boolean };
+
 const PENDING_POLL_MS = 50;
 
 export interface OneShot {
@@ -18,24 +20,36 @@ export interface OneShot {
 // reports a refusal only to its own error listeners, so a one-shot /loop
 // waiting on the settle would never return. It cannot see an input handler
 // that consumes the prompt.
-async function noRunReason(pi: ExtensionAPI, prompt: string, ctx: ExtensionContext): Promise<string | undefined> {
+async function noRunReason(
+  pi: ExtensionAPI,
+  prompt: string,
+  ctx: ExtensionContext,
+): Promise<string | undefined> {
   if (prompt.startsWith("/")) {
     const space = prompt.indexOf(" ");
     const name = prompt.slice(1, space === -1 ? undefined : space);
-    if (pi.getCommands().some((command) => command.source === "extension" && command.name === name)) {
+    if (
+      pi.getCommands().some((command) => command.source === "extension" && command.name === name)
+    ) {
       return `/${name} is an extension command, not a prompt`;
     }
   }
   const model = ctx.model;
   if (!model) return "no model is selected";
-  if (ctx.modelRegistry.hasConfiguredAuth(model)) return undefined;
+  // Pi exposes ctx.model with an open API parameter; its own registry consumes this same model.
+  if (
+    ctx.modelRegistry.hasConfiguredAuth(
+      model as Parameters<typeof ctx.modelRegistry.hasConfiguredAuth>[0],
+    )
+  )
+    return undefined;
   const available = await ctx.modelRegistry.getAvailableOfType("chat", model.provider);
   return available.length ? undefined : "the selected model has no credentials";
 }
 
 // Resolves once Pi has a queued message, which is the same condition Pi checks
 // after agent_before_settle returns to decide whether the run continues.
-function pendingMessage(ctx: ExtensionContext, signal: { done: boolean }): Promise<void> {
+function pendingMessage(ctx: ExtensionContext, signal: SettleSignal): Promise<void> {
   return new Promise((resolve) => {
     const timer = setInterval(() => {
       if (!signal.done && !ctx.hasPendingMessages()) return;
@@ -51,10 +65,15 @@ function pendingMessage(ctx: ExtensionContext, signal: { done: boolean }): Promi
 // exits or a message arrives; /loop must wait for the run it started; a wakeup
 // could never fire; Ctrl-C must take the children along, since pi leaves SIGINT
 // at its default in print mode.
-export function registerOneShot(pi: ExtensionAPI, settings: Settings, runner: Pick<AgentRunner, "nextExit">): OneShot {
+export function registerOneShot(
+  pi: ExtensionAPI,
+  settings: Settings,
+  runner: Pick<AgentRunner, "nextExit">,
+): OneShot {
   // Print and json runs exit once the agent settles. A pstack child is an rpc
   // process whose parent closes its stdin at the same moment, so it is one-shot too.
-  const exits = (ctx: Pick<ExtensionContext, "mode">) => ctx.mode === "print" || ctx.mode === "json" || settings.depth > 0;
+  const exits = (ctx: Pick<ExtensionContext, "mode">) =>
+    ctx.mode === "print" || ctx.mode === "json" || settings.depth > 0;
   const settleWaiters: (() => void)[] = [];
   const settle = () => {
     for (const resolve of settleWaiters.splice(0)) resolve();
@@ -73,7 +92,10 @@ export function registerOneShot(pi: ExtensionAPI, settings: Settings, runner: Pi
   pi.on("agent_settled", settle);
   return {
     exits,
-    untilSettled: () => new Promise<void>((resolve) => settleWaiters.push(resolve)),
+    untilSettled: () =>
+      new Promise<void>((resolve) => {
+        settleWaiters.push(resolve);
+      }),
     assertStartsRun: async (prompt, ctx) => {
       const reason = await noRunReason(pi, prompt, ctx);
       if (reason === undefined) return;
