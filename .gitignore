@@ -25,3 +25,6 @@ plugins/pstack/skills/poteto-mode/scripts/node_modules/
 
 # Lake build output for the Lean models
 /lean/.lake/
+
+# Compiled standalone skill tools
+/plugins/pstack/skills/poteto-mode/scripts/dist/
