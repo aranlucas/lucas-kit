@@ -820,6 +820,60 @@ describe("context and stack discovery", () => {
     expect(ordered.map((item) => Number(item.number))).toEqual([41, 42, 43]);
   });
 
+  it("does not use a fork's same-named head as a stack parent", () => {
+    const open = [
+      {
+        number: parsePrNumber(41),
+        headRepository: { owner: "contributor", repo: "repo" },
+        headRefName: "base-feature",
+        baseRefName: "main",
+      },
+      {
+        number: context.number,
+        headRepository: { owner: "owner", repo: "repo" },
+        headRefName: "feature",
+        baseRefName: "base-feature",
+      },
+    ];
+    expect(numbers(orderStack(context, "main", open))).toEqual([42]);
+  });
+
+  it("does not attach upstream branch children to a fork head", () => {
+    const open = [
+      {
+        number: context.number,
+        headRepository: { owner: "contributor", repo: "repo" },
+        headRefName: "feature",
+        baseRefName: "main",
+      },
+      {
+        number: parsePrNumber(43),
+        headRepository: { owner: "owner", repo: "repo" },
+        headRefName: "upstack",
+        baseRefName: "feature",
+      },
+    ];
+    expect(numbers(orderStack(context, "main", open))).toEqual([42]);
+  });
+
+  it("terminates when an unrelated fork opens main against main", () => {
+    const open = [
+      {
+        number: parsePrNumber(41),
+        headRepository: { owner: "contributor", repo: "repo" },
+        headRefName: "main",
+        baseRefName: "main",
+      },
+      {
+        number: context.number,
+        headRepository: { owner: "owner", repo: "repo" },
+        headRefName: "feature",
+        baseRefName: "main",
+      },
+    ];
+    expect(numbers(orderStack(context, "main", open))).toEqual([42]);
+  });
+
   it("keeps a PR whose head is the default branch out of every stack", () => {
     const repo = { owner: "owner", repo: "repo" };
     const backport = parsePrNumber(2);

@@ -1089,3 +1089,60 @@ describe("a PR with no checks configured", () => {
       });
   });
 });
+
+describe("polling deadline sleeps", () => {
+  for (const mode of ["single", "queued-stack", "query-retry"] as const) {
+    it(`caps ${mode} sleeps at the configured deadline`, async () => {
+      let now = 0;
+      const sleeps: number[] = [];
+      const pending = fakeReader({
+        fastPath: { kind: "checks", checks: [pendingCheck()] },
+      });
+      const reader =
+        mode === "query-retry"
+          ? ({
+              ...pending,
+              async pullRequest() {
+                throw new WatcherQueryError({
+                  kind: "command-exit",
+                  retryable: true,
+                  code: 1,
+                  detail: "temporary failure",
+                });
+              },
+            } satisfies GitHubReader)
+          : pending;
+      const polling = { ...options, interval: 60, timeout: 5 };
+      const dependencies = {
+        reader,
+        deadline: new WatchDeadline(polling.timeout, () => now),
+        clock: {
+          now: () => now,
+          observedAt: () => "2026-07-26T00:00:00.000Z",
+          async sleep(seconds: number) {
+            sleeps.push(seconds);
+            now += seconds;
+          },
+        },
+        emit() {},
+      };
+      const result =
+        mode === "queued-stack"
+          ? await runQueued({
+              dependencies,
+              contexts: [context(1)],
+              options: polling,
+            })
+          : await runSimple({
+              dependencies,
+              contexts: [context(1)],
+              mode: "single",
+              statusOnly: false,
+              options: polling,
+            });
+      expect(result.kind).toBe("TIMEOUT");
+      expect(sleeps).toEqual([5]);
+      expect(now).toBe(5);
+    });
+  }
+});
