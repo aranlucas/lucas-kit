@@ -72,7 +72,7 @@ for (let i = start; i < raw.length; i++) {
 	lines.push({ n, text, code });
 	if (code) continue;
 	const prose = text
-		.replaceAll(/`[^`]*`/g, "`")
+		.replaceAll(/(?<!`)(`+)(?!`)(.*?)(?<!`)\1(?!`)/g, "`")
 		.replaceAll(/!\[[^\]]*\]\([^)]*\)/g, "")
 		.replaceAll(/\]\([^)]*\)/g, "]");
 	if (/[\u2013\u2014]/.test(prose)) fail(n, "long dash");

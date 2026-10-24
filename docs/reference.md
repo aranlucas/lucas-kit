@@ -34,12 +34,16 @@ Find each skill's instructions in the [skills tree](../plugins/pstack/skills/).
 | `/blast-radius` | find what a change could break beyond the diff and prove safety by running code |
 | `/recall` | catch up on recent working context from chat history, live state, and the shared record |
 | `/ketchup` | catch up on everything in this chat since your last message, with an executive summary for each action item |
+| `/ketchup-video` | catch up like `/ketchup`, as a short silent slide video with the waiting calls as text |
 | `/setup-pstack` | configure pstack per-role model choices |
 | `/poteto-help` | answer a question about pstack with the prompt to send and the file the answer came from |
 | `/unslop` | clean up writing by removing AI tells |
 | `/no-comments` | strip comments before review, fix the accepted findings, encode claimed constraints |
 | `/create-verification-skill` | generate a project-local verification skill and feature map |
 | `/maintain-verification-skill` | re-sync a drifted verification skill and its feature map |
+| `/create-formal-verification-skill` | generate a project-local skill that formally verifies the code where a bug costs most and tests reach least |
+| `/maintain-formal-verification-skill` | bring a formal verification skill back in line with code that changed under it |
+| `/statechart` | draw how a system moves between states as a Mermaid statechart from a TLA+ model, with each bug as a numbered path |
 | `/deslop` | deslop a diff before commit |
 | `/babysit` | monitor an open PR, fix CI/comments, keep it merge-ready |
 | `/thermo-nuclear-review` | audit a branch's changes for bugs, breakage, security issues, devex regressions, and feature-gate leaks |
