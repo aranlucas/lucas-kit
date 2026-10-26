@@ -64,6 +64,8 @@ permissions. Its source manifest must have string `name` and `version` fields;
 temporary staging is removed on success or failure. The release workflow calls
 `node tools/release-notes.mjs <version> <notes-file>` to write the exact release's
 notes and print its title. All three tools report invalid invocation with exit code 2.
+`pnpm lint:runtime`, also run in CI, includes these tools and enforces classic
+cyclomatic complexity below 10 and nesting depth at most 3 with native Oxlint rules.
 
 The root `package.json` declares `typebox` and the optional `@earendil-works/pi-coding-agent` as peer dependencies, because Pi provides both to an extension at runtime. `autoInstallPeers: false` prevents automatic peer installation. Pi 1.1.0 and its coordinated companion packages are also pinned for development so root type-aware lint resolves the real extension API; CI keeps its separate strict check against the external Pi installation. The root `pnpm-lock.yaml` pins the development dependency `typebox` for the generator, which checks hook files against it, and for the tests under `test/pi/`, which load the extension outside Pi.
 

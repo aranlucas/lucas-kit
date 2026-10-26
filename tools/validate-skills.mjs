@@ -11,6 +11,7 @@ export const SKIPPED_DIRS = new Set([".git", "node_modules"]);
 
 // Sorted, so reports and scans read the same on every filesystem.
 /**
+ * Return sorted files below a directory, excluding dependency and Git directories.
  * @param {string} dir
  * @returns {readonly string[]}
  */
@@ -26,6 +27,7 @@ export function walk(dir) {
 }
 
 /**
+ * Return Markdown files in the same deterministic order as walk().
  * @param {string} dir
  * @returns {readonly string[]}
  */
@@ -113,6 +115,8 @@ function prosePathProblems(text, file, root) {
 }
 
 /**
+ * Reject prose references to existing plugin resources outside the installed skills.
+ * Missing tokens remain valid placeholders. Filesystem errors propagate unchanged.
  * @param {string} skillsDir
  * @returns {void}
  */
@@ -127,7 +131,46 @@ export function validateProsePaths(skillsDir) {
   }
 }
 
+/** @param {string} target */
+function isNonLocalTarget(target) {
+  if (target.startsWith("#") || target.startsWith("//")) return true;
+  const scheme = target.match(/^([a-z][a-z0-9+.-]*):/i)?.[1]?.toLowerCase();
+  return Boolean(scheme && scheme !== "file");
+}
+
 /**
+ * Return the first path problem, preserving the lexical-before-realpath checks.
+ * @param {string} target
+ * @param {string} file
+ * @param {string} root
+ * @param {string} realRoot
+ * @returns {string | undefined}
+ */
+function localTargetProblem(target, file, root, realRoot) {
+  if (isNonLocalTarget(target)) return;
+  const encodedPath = target.split(/[?#]/, 1)[0];
+  if (!encodedPath) return;
+
+  let path;
+  try {
+    path = decodeURIComponent(encodedPath);
+  } catch {
+    return "invalid URI encoding";
+  }
+
+  const resolved = resolve(dirname(file), path);
+  if (/^file:/i.test(target) || isAbsolute(path) || !pathIsInside(root, resolved)) {
+    return "escapes skills tree";
+  }
+  if (!existsSync(resolved)) return "missing";
+  if (!pathIsInside(realRoot, realpathSync(resolved))) return "escapes skills tree through symlink";
+}
+
+/**
+ * Reject missing, malformed or escaping local Markdown destinations.
+ * Remote schemes, anchors and query-only links are ignored. File URLs are rejected.
+ * Diagnostics follow sorted file order, with inline links before reference links.
+ * Filesystem read errors propagate immediately, before accumulated diagnostics.
  * @param {string} skillsDir
  * @returns {void}
  */
@@ -137,28 +180,8 @@ export function validateSkillsTree(skillsDir) {
   const problems = [];
   for (const file of markdownFiles(root)) {
     for (const target of markdownTargets(readFileSync(file, "utf8"))) {
-      if (target.startsWith("#") || target.startsWith("//")) continue;
-      const scheme = target.match(/^([a-z][a-z0-9+.-]*):/i)?.[1]?.toLowerCase();
-      if (scheme && scheme !== "file") continue;
-
-      const encodedPath = target.split(/[?#]/, 1)[0];
-      if (!encodedPath) continue;
-      let path;
-      try {
-        path = decodeURIComponent(encodedPath);
-      } catch {
-        problems.push(`${relative(root, file)} -> ${target} (invalid URI encoding)`);
-        continue;
-      }
-
-      const resolved = resolve(dirname(file), path);
-      if (scheme === "file" || isAbsolute(path) || !pathIsInside(root, resolved)) {
-        problems.push(`${relative(root, file)} -> ${target} (escapes skills tree)`);
-      } else if (!existsSync(resolved)) {
-        problems.push(`${relative(root, file)} -> ${target} (missing)`);
-      } else if (!pathIsInside(realRoot, realpathSync(resolved))) {
-        problems.push(`${relative(root, file)} -> ${target} (escapes skills tree through symlink)`);
-      }
+      const problem = localTargetProblem(target, file, root, realRoot);
+      if (problem) problems.push(`${relative(root, file)} -> ${target} (${problem})`);
     }
   }
   if (problems.length) throw new Error(`invalid local markdown links:\n${problems.join("\n")}`);
