@@ -2,7 +2,6 @@
 
 import { existsSync, readFileSync, readdirSync, realpathSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
-import { pathToFileURL } from "node:url";
 
 // The one directory walker for every tool in tools/. `node_modules` under
 // poteto-mode/scripts is gitignored but present on any machine that ran the
@@ -165,7 +164,7 @@ export function validateSkillsTree(skillsDir) {
   if (problems.length) throw new Error(`invalid local markdown links:\n${problems.join("\n")}`);
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (import.meta.main) {
   const skillsDir = process.argv[2];
   if (!skillsDir) {
     console.error("usage: node tools/validate-skills.mjs <skills-directory>");

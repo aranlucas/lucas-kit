@@ -3,21 +3,56 @@
 // Stage outside the checkout so packaging never duplicates or edits source skills.
 import { execFileSync } from "node:child_process";
 import { gzipSync, gunzipSync } from "node:zlib";
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import {
+  cpSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join, relative, resolve } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
+import { Type } from "typebox";
+import { Value } from "typebox/value";
 import { validateProsePaths, validateSkillsTree, walk } from "./validate-skills.mjs";
 import { runPnpm } from "./pnpm.mjs";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 const notices = ["LICENSE", "LICENSE-cursor-team-kit", "LICENSE-thermos", "NOTICE-skills.md"];
 
+// Only name and version drive packaging. Preserve optional metadata verbatim.
+const packageMetadata = Type.Object({
+  name: Type.String(),
+  version: Type.String(),
+  author: Type.Optional(Type.Unknown()),
+  homepage: Type.Optional(Type.Unknown()),
+  repository: Type.Optional(Type.Unknown()),
+  license: Type.Optional(Type.Unknown()),
+  packageManager: Type.Optional(Type.Unknown()),
+  engines: Type.Optional(Type.Unknown()),
+});
+
+/**
+ * Stage and pack the skill tree, preserving its bundled lockfiles and executables.
+ * Temporary staging is removed on success or failure; the source tree is untouched.
+ * @param {string} root Source checkout containing package.json and plugins/pstack/skills.
+ * @param {string} destination Directory for the resulting archive.
+ * @returns {string} Absolute archive path.
+ */
 export function packSkills(root = repoRoot, destination = join(root, "dist")) {
   const source = join(root, "plugins/pstack/skills");
   validateSkillsTree(source);
   validateProsePaths(source);
-  const { name, version, author, homepage, repository, license, packageManager, engines } = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
+  /** @type {unknown} */
+  const metadata = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
+  if (!Value.Check(packageMetadata, metadata)) {
+    throw new Error("package.json must contain a string name and version");
+  }
+  const { name, version, author, homepage, repository, license, packageManager, engines } =
+    metadata;
   const output = resolve(destination);
   const staging = mkdtempSync(join(tmpdir(), "lucas-kit-skills-"));
   try {
@@ -31,16 +66,26 @@ export function packSkills(root = repoRoot, destination = join(root, "dist")) {
       .filter((file) => statSync(file).mode & 0o111)
       .map((file) => relative(staging, file).split("\\").join("/"));
     cpSync(join(root, "README.md"), join(staging, "README.md"));
-    writeFileSync(join(staging, "package.json"), `${JSON.stringify({
-      name,
-      version,
-      description: "Lucas Kit agent skills for pnpm projects. Requires T3 Code's MCP tools.",
-      author, homepage, repository, license,
-      packageManager,
-      engines,
-      publishConfig: { access: "public", executableFiles },
-      files: ["skills", "README.md", ...notices],
-    }, null, 2)}\n`);
+    writeFileSync(
+      join(staging, "package.json"),
+      `${JSON.stringify(
+        {
+          name,
+          version,
+          description: "Lucas Kit agent skills for pnpm projects. Requires T3 Code's MCP tools.",
+          author,
+          homepage,
+          repository,
+          license,
+          packageManager,
+          engines,
+          publishConfig: { access: "public", executableFiles },
+          files: ["skills", "README.md", ...notices],
+        },
+        null,
+        2,
+      )}\n`,
+    );
     mkdirSync(output, { recursive: true });
     const archive = join(output, `${name.replace(/^@/, "").replace("/", "-")}-${version}.tgz`);
     const packed = runPnpm(["pack", "--json", "--out", archive], {
@@ -66,7 +111,13 @@ export function packSkills(root = repoRoot, destination = join(root, "dist")) {
       }
       const tarball = join(staging, "packed.tar");
       writeFileSync(tarball, gunzipSync(readFileSync(archive)));
-      execFileSync("tar", ["-rf", tarball, "-C", additions, ...locks.map((file) => join("package", file).split("\\").join("/"))]);
+      execFileSync("tar", [
+        "-rf",
+        tarball,
+        "-C",
+        additions,
+        ...locks.map((file) => join("package", file).split("\\").join("/")),
+      ]);
       writeFileSync(archive, gzipSync(readFileSync(tarball)));
     }
     return archive;
@@ -75,7 +126,7 @@ export function packSkills(root = repoRoot, destination = join(root, "dist")) {
   }
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (import.meta.main) {
   if (process.argv.length > 3) {
     console.error("usage: node tools/pack-skills.mjs [output-directory]");
     process.exitCode = 2;
