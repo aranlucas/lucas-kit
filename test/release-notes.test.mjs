@@ -34,7 +34,15 @@ test("a missing entry fails rather than publishing empty notes", () => {
   expect(() => releaseNotes(changes, "1.0.3")).toThrow('CHANGES.md has no "## 1.0.3" entry');
 });
 
+test.each([
+  { heading: "## 1.0.2", title: "v1.0.2" },
+  { heading: "## 1.0.2 - Final release", title: "v1.0.2 - Final release" },
+])("a final heading without a newline yields empty notes: $heading", ({ heading, title }) => {
+  expect(releaseNotes(heading, "1.0.2")).toEqual({ title, body: "" });
+});
+
 test("the current VERSION has notes", () => {
+  /** @param {string} path */
   const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
   expect(releaseNotes(read("CHANGES.md"), read("VERSION").trim()).body).not.toBe("");
 });

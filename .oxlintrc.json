@@ -42,5 +42,14 @@
   },
   "options": {
     "typeAware": true
-  }
+  },
+  "overrides": [
+    {
+      "files": ["tools/pack-skills.mjs", "tools/release-notes.mjs", "tools/validate-skills.mjs"],
+      "rules": {
+        "eslint/complexity": ["error", { "max": 9, "variant": "classic" }],
+        "eslint/max-depth": ["error", 3]
+      }
+    }
+  ]
 }

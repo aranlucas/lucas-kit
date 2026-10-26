@@ -50,6 +50,9 @@ minimumReleaseAge: 0
 # Pi 1.4.0 uses loose ranges for coordinated internal packages. Keep its
 # development install aligned with CI's known-working 1.4.0 release snapshot.
 overrides:
+  # Pi 1.4.0 pins this vulnerable release. The patch fixes GHSA-4qv8-2p9j-2685,
+  # GHSA-f72v-6w45-q472 and GHSA-xjj6-f33q-929c without changing the Pi snapshot.
+  "undici@8.10.2": "8.12.2"
   "@earendil-works/chord": "1.4.0"
   "@earendil-works/pi-agent-core": "1.4.0"
   "@earendil-works/pi-ai": "1.4.0"

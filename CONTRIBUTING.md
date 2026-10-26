@@ -51,6 +51,22 @@ pnpm generate
 pnpm test
 ```
 
+Maintainer tools use Node's `import.meta.main` to run only as process entry points.
+This works through file or directory symlinks and leaves imports inert, even if a
+caller rewrites `process.argv[1]`. Keep the native guard when adding CLI behavior;
+do not compare the entry path with `import.meta.url`. Run
+`pnpm test test/cli-entrypoints.test.mjs` for execution, import, and failure regressions.
+
+`node tools/validate-skills.mjs <skills-directory>` checks local Markdown links and
+prose paths, reporting a failed check with exit code 1. `pnpm pack:skills [output-directory]`
+validates and packages the skill tree, preserving nested lockfiles and executable
+permissions. Its source manifest must have string `name` and `version` fields;
+temporary staging is removed on success or failure. The release workflow calls
+`node tools/release-notes.mjs <version> <notes-file>` to write the exact release's
+notes and print its title. All three tools report invalid invocation with exit code 2.
+`pnpm lint:runtime`, also run in CI, includes these tools and enforces classic
+cyclomatic complexity below 10 and nesting depth at most 3 with native Oxlint rules.
+
 The root `package.json` declares `typebox` and the optional `@earendil-works/pi-coding-agent` as peer dependencies, because Pi provides both to an extension at runtime. `autoInstallPeers: false` prevents automatic peer installation. Pi 1.1.0 and its coordinated companion packages are also pinned for development so root type-aware lint resolves the real extension API; CI keeps its separate strict check against the external Pi installation. The root `pnpm-lock.yaml` pins the development dependency `typebox` for the generator, which checks hook files against it, and for the tests under `test/pi/`, which load the extension outside Pi.
 
 The generator writes `VERSION` into all four plugin manifests and the Pi `package.json` and stamps model defaults from `plugins/pstack/models.json`. It also owns the lines under the first heading of some files: the Codex preamble on each skill with a row in the Per-skill notes table of `skills/poteto-mode/references/codex-tools.md`, and the driver-skill line on the playbooks in `DRIVER_PLAYBOOKS`. Either line anywhere else fails the generator, so a skill gets the preamble by gaining a notes row. The GitHub Copilot preamble comes the same way from the Per-skill notes table of `copilot-tools.md` and follows any Codex preamble. No skill file carries a Pi line: `poteto-mode/SKILL.md` points at `pi-tools.md` once, and a skill's Pi note is a row in that file. For Copilot it also stamps the role list in `skills/setup-pstack/scripts/sheet.awk`, the roles-by-tier table in `setup-pstack/copilot.md`, and the role-model skill list in `hooks/session-start-copilot.md` from `models.json`. It validates each skill's `name` and `description`, then generates a Codex prompt for each public skill using the [slash-command table](docs/reference.md#slash-commands).
