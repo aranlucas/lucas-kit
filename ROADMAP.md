@@ -4,14 +4,6 @@ Updated 2026-10-26. Proposed product work for maintainers using the kit in owned
 repositories. Digits/MCP delivery takes portfolio priority. Time and quota
 savings below are hypotheses to measure, not demonstrated results.
 
-## Starting point
-
-At `191468f0e016ccbdd30a17112e894c4dbc7a6d3f`, the [kit](README.md) already
-packages planning, implementation and review workflows through pnpm-managed
-skills. T3 provides orchestration, model preferences are configurable, and the
-port has explicit upstream/fork boundaries. Installation and native CLI entry
-points do not need to be reinvented.
-
 ## Ordered releases
 
 1. **Choose the amount of work before starting it.** Offer concise workflow

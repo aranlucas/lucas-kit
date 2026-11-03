@@ -1,164 +1,101 @@
 # Contributing
 
-Thanks for helping out. This repo is a **port**, not an original work: the `skills/` tree tracks [upstream pstack](https://github.com/cursor/plugins/tree/main/pstack) and gets synced forward periodically. That one fact shapes most of what follows.
-
-[CONTEXT.md](CONTEXT.md) is the glossary for the terms below.
+Lucas Kit is the T3-specific fork of [pstack-claude](https://github.com/michael-denyer/pstack-claude), which ports [Cursor's pstack](https://github.com/cursor/plugins/tree/main/pstack). Read the [design decisions](docs/lucas-kit-design.md) before changing that boundary.
 
 ## The sync boundary
 
-Upstream owns skill content. This port owns the Cursor-to-Claude-Code translation. It also carries named forks, each declared in [`tools/forks.json`](tools/forks.json) as a `port-feature` (Claude Code, Codex, Pi, or GitHub Copilot mechanics upstream cannot carry) or a `policy` (a workflow change the port chose to keep).
+Prefer merging reviewed pstack-claude updates so this fork keeps the port's translations and upstream ownership records. Preserve Lucas Kit's identity, independent `VERSION`, T3 model policy, and absent root plugin manifest; resolve generated-file conflicts by regenerating after the source conflicts are settled.
 
-Both kinds of `SKILL.md` change land here. Upstream rarely merges pull requests from outside its own team, so this port does not ask you to land a change there first. Before changing a `SKILL.md`, work out which kind yours is:
+The inherited Cursor sync machinery uses three sources:
 
-- **Fixing the port.** A Cursor primitive that resolves wrong on Claude Code, a broken cross-reference, a stale model slug. Open a PR.
-- **Changing what a skill does.** New steps, a different workflow, reworded guidance. Open a PR here too. The port keeps the change as a `policy` fork, and every later sync merges it three ways against upstream's new text. Keep the edit small and in one place, because a wide rewrite conflicts each time upstream touches the same lines, and someone has to settle the change again under time pressure.
+- [tools/upstream.json](tools/upstream.json): component pins, local paths, and exclusions.
+- [tools/substitutions.json](tools/substitutions.json): mechanical rewrites and denylist, with a rationale for each rewrite. Rules run in order; put a longer pattern before a shorter pattern it contains.
+- [tools/forks.json](tools/forks.json): deliberate per-file departures, classified as `port-feature` or `policy`, with `why`, `since`, and `upstream` (`not-proposed` or a proposal URL).
 
-Declare each file your change forks in `tools/forks.json` in the same PR, so the next sync knows it is deliberate and not drift. Set the entry's `upstream` field to `not-proposed`, or to the URL of an upstream PR or issue if you opened one.
-
-Each substitution rule in [`tools/substitutions.json`](tools/substitutions.json) has a `rationale` field that gives its reason. If you add a rule, fill in its `rationale` in the same PR.
+A skill behavior change belongs here as a declared policy fork. Runtime adaptations are port features. Keep changes focused: each subsequent upstream sync must reconcile them. The T3 overlay is maintained on top of pstack-claude; do not treat its inherited Cursor pins as the version of Lucas Kit.
 
 ### Running a sync
 
-Read the latest commit on `cursor/plugins`'s `main` branch once and use that exact SHA for the sync:
+Use this procedure when deliberately updating a Cursor component rather than merging the port. Capture one exact upstream SHA and preview it:
 
 ```shell
 upstream_sha=$(git ls-remote https://github.com/cursor/plugins.git refs/heads/main | cut -f1)
 pnpm sync pstack "$upstream_sha" --dry-run
-pnpm sync pstack "$upstream_sha"
 ```
 
-Review the dry-run report before applying it. Resolve every reported conflict and denylist hit before committing. `tools/upstream.json` lists the tracked components (`pstack`, `cursor-team-kit`, and `thermos`). Sync each component separately with the same captured SHA when updating more than one. Their local paths overlap, so finish and review one component before previewing the next. Substitute the component name in the commands above. The sync updates that component's pin only after a successful write.
+Review the ownership report, then apply with `pnpm sync pstack "$upstream_sha"`. Substitute `cursor-team-kit` or `thermos` for other components. Their local paths overlap, so finish one before starting another. Use the pinned SHA with `--dry-run` to audit current forks without advancing them.
 
-`tools/upstream.json` pins the current upstream SHA per component; `tools/substitutions.json` holds the mechanical Cursor-to-Claude rewrites and a denylist of Cursor-isms that need a rewritten sentence rather than a token swap. A rewrite matches a literal `pattern` or a `regex`, optionally only in files whose upstream-relative path matches `files`, and carries a literal `replacement` and a `rationale`; a denylist entry is a literal `token` or a `regex`. Rewrites run in order, each on the output of the ones before it, so a pattern goes above any shorter pattern it contains. The tool fails on a rule in the reverse order, on an unknown field, and on a rule without exactly one matcher. Match a shape, such as a backticked model slug, rather than one version of it, so an upstream model bump needs no new rule. The tool fetches both upstream revisions and derives each upstream file into its port form: the substitutions, then `deriveSkill` in `tools/generate.mjs`. It sets a skill's or plugin agent's `name` to its directory or file name, drops the Cursor-only `mode`, `icon`, `color`, `reminder`, and `is_background` keys, and drops `disable-model-invocation` (or swaps it for `user-invocable: false` on a `principle-*` leaf). Then it applies the generator's stamps, appending a `## Models` section where upstream has none. It writes files whose only local differences came from upstream (new files included), deletes files upstream removed that the port never edited in text or mode, and runs `git merge-file` on the rest: a file the port forked that upstream left alone (its text or only its mode) is counted as forked and left alone, non-overlapping edits are merged and written, and a real conflict is written with git's `<<<<<<< local`, `=======`, and `>>>>>>> upstream` markers and listed with its hunk count. A written file takes upstream's file mode, except that a merged or conflicted file keeps the port's mode when upstream left the mode alone. Mode here means what git records, executable or not. A write grants no permission that the file's own bits or your umask withhold. A new file is created through the umask. An existing file changes only when its mode has to, and then only in its execute bits, which are set where the file is readable or all cleared. An upstream change to the executable bit alone is written too. Symlinks, upstream's or the port's at an upstream path or at a directory above one, and files upstream deleted that the port had edited join the same conflicts list under their own reason. A deleted file the port had edited stays, and prints under the pinned summary as now port-only, so the CHANGES.md entry can record that decision. The tool never follows or writes through a symlink on either side. An upstream link's target can sit outside the clone, and writing through a port link would change or create its target. A file that differs three ways cannot carry markers when upstream's or the port's copy is binary, so it fails the run with its path: replace it with upstream's version or add it to `exclude`, then rerun. A port path in the way of a file upstream writes also fails the run, before any write, with the port's path: a file where upstream has a directory, a directory where upstream has a file, or an entry spelled another way that the filesystem treats as the same name, as the default macOS filesystem does for case and Unicode normalisation. Rename or delete it, then rerun. Any denylist token in a written file, conflict markers included, fails the run with the file, line, and hint — add a substitution rule or rewrite the sentence, then rerun. A failed run writes nothing. The pin advances only on success, and a run with conflicts succeeds: the generator fails on any conflict-marker line under `plugins/pstack`, so resolve every hunk before you commit. Write the CHANGES.md entry from the printed report, then run the generator and the tests as usual.
+The sync performs a three-way merge. Text conflicts are written with Git markers and still advance the pin on a successful run; resolve every hunk before regenerating. A failure writes nothing. Binary conflicts, symlinks, obstructing paths, and denylist hits require manual resolution before rerunning. Never resolve an obstruction by deleting unrelated files.
 
-`--dry-run` reports without writing. The tool takes the component, the SHA, and `--dry-run`, and any other argument exits 2 naming it, so a mistyped flag never runs a real sync. Passing the pinned SHA itself under `--dry-run` prints the ownership map. Every file under the forked count is one the port has forked, nothing is written or conflicted, and everything else syncs clean. Each forked file prints with its changed lines against the derived upstream text, largest first, above a total, and a fork that differs only in file mode prints `mode`. The `port-only` list names every file under the component's local path that no component carries upstream at its pin, excluded paths aside.
-
-`tools/forks.json` declares every fork under its component, keyed by repo-relative path. Each entry has a `kind` (`port-feature` or `policy`), a one-sentence `why` naming the mechanism, the `since` release the fork first shipped in, and an `upstream` status: `not-proposed`, or the URL of the upstream PR or issue. The ownership map prints each fork's kind beside its count. A forked, merged, or conflicted path with no entry fails the run, dry runs included, and a real run then writes nothing. Add the entry in the PR that forks the file. An entry whose path is not forked or no longer exists fails a run at the pinned SHA, which is the CI check, and the run writes nothing. So does an upstream file the port deleted without adding it to `exclude`, since a sync to a new SHA would write it back. On a sync to a new SHA the same entry only warns, because upstream absorbed the fork in that run; delete the entry in the sync's PR.
-
-When a clean merge matches the new upstream text and mode, the sync reports it as `updated`. Any existing fork declaration becomes stale in that same run, and removing the declaration does not block the update. A surviving port mode change still counts as a fork even when the text matches upstream.
+Declare deliberate forks in the same PR. A file deleted locally but still tracked upstream needs an exclusion or a later sync can restore it. Remove a stale fork declaration when upstream absorbs the difference. Review files reported as now port-only, including locally edited files that upstream deleted, and record consequential decisions in the release notes.
 
 ## Before you open a PR
 
-Use Node.js 26 and the pnpm version pinned in `packageManager` (currently 12.15.0) for development commands. `.node-version` selects Node.js 26; both packages require `26.x`, and pnpm rejects other Node.js majors through `engineStrict`. The generator uses the `yaml` parser, and `pnpm test` runs Vitest. All Node.js CI and release jobs run on Node.js 26. CI runs on Ubuntu only; native Windows/macOS behavior is no longer exercised by dedicated jobs. The vendored scripts remain a separate package with their own frozen pnpm install and test suite.
-
-The root `tsconfig.json` and pinned Node declarations give type-aware Oxlint a project for the JavaScript tools, fixtures, and Pi extension. They do not replace the separate strict Pi or vendored-script checks below. `pnpm lint` still reports existing first-party source debt. `pnpm lint:runtime` checks the Pi extension, its package/typecheck helpers and shared/session fixtures, and the port-owned worktree audit; CI runs this bounded check on Node.js 26. Root lint selects `.oxlintrc.json` explicitly so nested package configs cannot replace its exclusions. It excludes the vendored/forked Cursor pstack watcher, orchestrator, bootstrap, and plan checker paths listed with their upstream source in `.oxlintrc.json`. `pnpm lint:test` checks the root-owned `test/` tree with the shared Oxforge Vitest preset and rejects warnings. CI runs that bounded check before the root tests; the vendored suites retain their upstream tooling.
-
-Install the root dependencies, then run the generator and the tests:
+Use Node.js 26 and the pnpm version in `packageManager`. Install once, then run checks appropriate to your change:
 
 ```shell
 pnpm install --frozen-lockfile
-pnpm generate
+pnpm generate:check
 pnpm test
 ```
 
-Maintainer tools use Node's `import.meta.main` to run only as process entry points.
-This works through file or directory symlinks and leaves imports inert, even if a
-caller rewrites `process.argv[1]`. Keep the native guard when adding CLI behavior;
-do not compare the entry path with `import.meta.url`. Run
-`pnpm test test/cli-entrypoints.test.mjs` for execution, import, and failure regressions.
+`pnpm generate:check` is read-only. After changing a source of generated content, run `pnpm generate` and commit the output. It checks the working tree, so passing with unstaged generated edits does not prove the commit is complete. The optional `prek install` / `pre-commit install` hook runs this same check; Husky runs lint-staged.
 
-`node tools/validate-skills.mjs <skills-directory>` checks local Markdown links and
-prose paths, reporting a failed check with exit code 1. `pnpm pack:skills [output-directory]`
-validates and packages the skill tree, preserving nested lockfiles and executable
-permissions. Its source manifest must have string `name` and `version` fields;
-temporary staging is removed on success or failure. The release workflow calls
-`node tools/release-notes.mjs <version> <notes-file>` to write the exact release's
-notes and print its title. All three tools report invalid invocation with exit code 2.
-`pnpm lint:runtime`, also run in CI, includes these tools and enforces classic
-cyclomatic complexity below 10 and nesting depth at most 3 with native Oxlint rules.
+Edit the sources rather than generated copies:
 
-The root `package.json` declares `typebox` and the optional `@earendil-works/pi-coding-agent` as peer dependencies, because Pi provides both to an extension at runtime. `autoInstallPeers: false` prevents automatic peer installation. Pi 1.1.0 and its coordinated companion packages are also pinned for development so root type-aware lint resolves the real extension API; CI keeps its separate strict check against the external Pi installation. The root `pnpm-lock.yaml` pins the development dependency `typebox` for the generator, which checks hook files against it, and for the tests under `test/pi/`, which load the extension outside Pi.
+- `VERSION` and the matching `CHANGES.md` release heading own versions.
+- [models.json](plugins/pstack/models.json) owns role defaults and runtime model tables; the user's sheet overrides choices at runtime. Add no model IDs to ordinary skill prose.
+- Each skill's `name` and `description` frontmatter owns discovery. Every public skill needs a row in the [slash-command table](docs/reference.md#slash-commands), which owns Codex menu descriptions and ordering.
+- Runtime mappings' per-skill tables own their generated preambles. Portable agent references and legal notices are copied from their originals.
 
-The generator writes `VERSION` into all four plugin manifests and the Pi `package.json` and stamps model defaults from `plugins/pstack/models.json`. It also owns the lines under the first heading of some files: the Codex preamble on each skill with a row in the Per-skill notes table of `skills/poteto-mode/references/codex-tools.md`, and the driver-skill line on the playbooks in `DRIVER_PLAYBOOKS`. Either line anywhere else fails the generator, so a skill gets the preamble by gaining a notes row. The GitHub Copilot preamble comes the same way from the Per-skill notes table of `copilot-tools.md` and follows any Codex preamble. No skill file carries a Pi line: `poteto-mode/SKILL.md` points at `pi-tools.md` once, and a skill's Pi note is a row in that file. For Copilot it also stamps the role list in `skills/setup-pstack/scripts/sheet.awk`, the roles-by-tier table in `setup-pstack/copilot.md`, and the role-model skill list in `hooks/session-start-copilot.md` from `models.json`. It validates each skill's `name` and `description`, then generates a Codex prompt for each public skill using the [slash-command table](docs/reference.md#slash-commands).
+### Things that will fail CI
 
-It also copies the four files in `PORTABLE_ASSETS` into the skills-only installation and removes stale generated files. `NOTICE-skills.md` supplies the notice included with those skills.
+The [CI workflow](.github/workflows/ci.yml) is authoritative for pinned tools and job configuration. These local checks cover common failures:
 
-The generator rejects missing Markdown links, links outside the skills tree, and instructions to open unreachable files. It checks for stray model names, requires a matching `CHANGES.md` heading, and validates the Codex marketplace and Claude hook paths. It also enforces these rules:
+| Change | Check or constraint |
+| --- | --- |
+| Skill links and packaged resources | `node tools/validate-skills.mjs plugins/pstack/skills`; local links must stay inside the skills tree. Backticked paths must not direct an installed skill to files it cannot carry. |
+| Skill layout and generated output | `pnpm generate:check`; no `commands/` directory, `disable-model-invocation`, stray runtime preambles, or unresolved conflict markers. Principle skills remain non-public; agent references stay namespaced. |
+| First-party runtime code | `pnpm lint:runtime`; bounded source check used by CI. `pnpm lint` also reports source debt outside that subset. |
+| Root tests | `pnpm lint:test` and targeted `pnpm test <test-file>`; `pnpm test` runs test lint first. |
+| Markdown | `pnpm dlx markdownlint-cli2@0.18.1 '**/*.md'`; correctness rules are in [.markdownlint-cli2.jsonc](.markdownlint-cli2.jsonc). |
+| Relative links and anchors | `lychee --offline --include-fragments --exclude-path node_modules --exclude-path .git '**/*.md'`; remote URLs are skipped. |
+| pnpm skill packaging | `PSTACK_REQUIRE_PNPM_SKILLS=1 pnpm test:pnpm`; checks approval, packaged resources, executable bits, offline reinstall, and revocation. |
+| Shell | `shellcheck --severity=warning <changed-script.sh>`; CI checks every shell script. |
+| Workflows | `uvx zizmor@1.29.0 --persona pedantic --min-severity low --collect all -- .`; scanning only `.github/workflows/` misses Dependabot config. Pin actions to full commit SHAs with version comments. |
 
-- No `commands/` directory.
-- No `disable-model-invocation` on a skill.
-- Every `principle-*` leaf sets `user-invocable: false`.
-- Plugin agents use their namespaced `pstack:<name>` names.
+Maintainer CLI entry points use `import.meta.main`; `test/cli-entrypoints.test.mjs` covers execution through symlinks, inert imports, and failure propagation. Preserve those contracts when changing tools.
 
-CI runs `pnpm generate:check`, which writes nothing and fails naming each generated file that is stale, missing, or orphaned, so commit the generator's output. Run the same command locally to preview CI. It checks your working tree, not the commit, so a gitignored file such as `.DS_Store` in a generated directory fails only locally, and uncommitted regenerated output passes only locally. `.pre-commit-config.yaml` runs the same command before each commit once you run `prek install` (or `pre-commit install`) in your clone.
+If changing inherited Pi code or `pi-tools.md`, run `pnpm typecheck:pi` against the external Pi version selected in CI, plus `test/pi/catalog.test.mjs` and `test/pi/runtime.test.mjs`. `PI_PACKAGE_DIR` selects an explicit installation; [tools/pi-package.mjs](tools/pi-package.mjs) defines other search locations. The development Pi dependency and CI's external compatibility target can differ; consult the manifest and workflow rather than assuming one version.
 
-When adding a skill, include `name` and `description` in its frontmatter. Public skills also need a row in the slash-command table. The row supplies the Codex menu description and ordering. The generator reports any skill missing a row or any row without a skill.
+If changing `skills/poteto-mode/scripts/`, run its separate frozen install, `pnpm typecheck`, and `pnpm test` from that directory. CI also checks its upstream Prettier settings with `pnpm dlx prettier@3.6.2 --check .`; preserve the documented exclusions in `.prettierignore`.
 
-Change model defaults in `models.json`, never in a skill body. A role names a tier from `tiers` (`default`, `strongest`, or `panel`), so moving a tier is one edit, the `codex` block gives the Codex example for each tier, and the `pi` block maps each available family name to a Pi model ID once per Pi provider, with a `fallback` provider for sessions on any other. The generator checks the configuration's structure as it loads it (`parseModels` in `tools/generate.mjs`) and fails naming the offending role, tier, or slug. `test/models.test.mjs` proves each malformed shape is rejected and checks that skills name every role they use. A full `claude-*` ID or a backticked available name such as `` `fable` `` outside a generated region fails the generator with its file and line.
+### Checks requiring credentials or external effects
 
-`pnpm test` covers the generator, the sync tool, the link validator, and `test/invariants.test.mjs`, which builds fixture trees that must trip each layout invariant. One check is behavioral and lives in `test/skill-collision-repro.sh`: it needs the `claude` CLI and API access and makes one haiku call to prove a user-typed `/plugin:name` reaches a skill with no `commands/` present. CI cannot run it, so run it locally at least once before a release.
+These checks are conditional, incur external effects, and are not part of an offline documentation check:
 
-If you touched `plugins/pstack/pi/` or `pi-tools.md`, run the Pi checks against a signed-in `pi` 1.1 as well. `pnpm typecheck:pi` typechecks the extension under strict against the installed Pi package's own types; it uses `PI_PACKAGE_DIR` when set and otherwise looks under the global npm root, then Homebrew's `pi-coding-agent` formula (`$(brew --prefix)/opt/pi-coding-agent/libexec/lib/node_modules`), then bun's global directory (`BUN_INSTALL_GLOBAL_DIR`, then `$BUN_INSTALL/install/global`, then `$XDG_CACHE_HOME/.bun/install/global`, then `~/.bun/install/global` and `~/.cache/.bun/install/global`), as `test/pi/catalog.test.mjs` and `test/pi/runtime.test.mjs` do through `tools/pi-package.mjs`. CI's `Pi extension types` job installs the pinned release in the global npm root. `PSTACK_PI_LIVE=1 pnpm test test/pi/live.test.mjs` drives the extension through real `pi` processes in about five minutes. It makes real model calls, on the shipped `openai` models by default. Set `PSTACK_PI_LIVE_PROVIDER=anthropic` to call the Claude models instead, or set `PSTACK_PI_LIVE_MODELS` to a `pi models:` line to replace individual models.
+- `test/skill-collision-repro.sh` makes a real Claude model call to verify slash invocation without a `commands/` directory. Run before a release affecting discovery.
+- `PSTACK_PI_LIVE=1 pnpm test test/pi/live.test.mjs` makes real model calls against a signed-in Pi. Provider/model overrides are defined in [the live harness](test/pi/live-harness.mjs).
+- `test/copilot-smoke.sh` uses a signed-in Copilot CLI, a temporary config home, and about twenty premium requests. Run for inherited hook, Copilot mapping, or setup changes. It does not establish Lucas Kit workflow support outside T3.
+- `node watch-pr/live-merge-safety.mjs --live-disposable`, from the vendored scripts directory, creates, merges in, and deletes a private GitHub repository. It needs `delete_repo` scope; if deletion fails it prints a manual cleanup command. Run before a release changing `watch-pr/`, with authorization for those effects.
 
-If you touched `plugins/pstack/hooks/`, `copilot-tools.md`, or `setup-pstack`, run `test/copilot-smoke.sh` against a signed-in `copilot` CLI. It installs the checkout into a throwaway `HOME` and `COPILOT_HOME`, spends about twenty premium requests, and skips when `copilot` is missing. Set `SMOKE_GITHUB=<owner>/<repo>@<ref>` to repeat the plugin-file checks on a GitHub marketplace install of a pushed ref.
-
-If you touched `skills/poteto-mode/scripts/`:
-
-```shell
-cd plugins/pstack/skills/poteto-mode/scripts
-pnpm install --frozen-lockfile
-pnpm typecheck
-pnpm test
-pnpm dlx prettier@3.6.2 --check .
-```
-
-The scripts use Prettier 3.6.2 at upstream's settings in `.prettierrc.json`, CI runs the same check, and `.prettierignore` names each file the check skips and why.
-
-`ship-pr` has one check CI cannot run. `watch-pr/live-merge-safety.mjs` creates a private repository on your `gh` account, drives `ship-pr inspect` and `cancel-pending` against a stale head, a moved base, and a retargeted base, confirms GitHub refuses a merge at a stale SHA, merges the current head, and deletes the repository. The delete needs the `gh` token's `delete_repo` scope; when it fails, the script prints the command to delete the repository by hand. Run it from the same directory before a release that changes `watch-pr/`:
-
-```shell
-node watch-pr/live-merge-safety.mjs --live-disposable
-```
-
-If you touched a workflow, audit it before pushing:
-
-```shell
-uvx zizmor@1.29.0 --persona pedantic --min-severity low --collect all -- .
-```
-
-`--collect all` matches what CI scans. Pointing zizmor at `.github/workflows/` alone skips `dependabot.yml`, so the local run comes back clean on findings CI will fail on.
-
-## Things that will fail CI
-
-- **A `plugins/pstack/commands/` directory.** Claude Code renders commands and user-invocable skills in the same slash menu, so a trampoline paired with its skill duplicates every `/pstack:<name>` row ([#22](https://github.com/michael-denyer/pstack-claude/issues/22)). Codex stubs live in `plugins/pstack/.codex-plugin/prompts/`. An upstream sync will try to reintroduce `commands/`; move any new stubs across.
-- **`disable-model-invocation` in a skill's frontmatter.** On a skill it makes the Skill tool refuse the invocation outright, which breaks the SessionStart mandate. The `principle-*` leaves use `user-invocable: false` instead.
-- **Stale generated output.** The `Generated files current` job runs `pnpm generate:check`, which fails naming each generated file to write or orphan to remove. Editing `VERSION` without regenerating, hand-editing a manifest's `version` field, or bumping without a matching `CHANGES.md` heading all land here. The same run validates `hooks/hooks.json`, the Codex hooks file `.codex-plugin/plugin.json` names, and the Copilot hooks file `.github/plugin/plugin.json` names: every `${CLAUDE_PLUGIN_ROOT}` path a command names, or `${COPILOT_PLUGIN_ROOT}` path in the Copilot file, must exist in the plugin.
-- **An unresolved sync conflict.** `pnpm generate` fails on any line under `plugins/pstack` that starts with seven `<`, `|`, `=`, or `>` followed by a space or the line end, and names the file and line. A sync writes the `<`, `=`, and `>` markers for every text conflict. A `|` line comes from a merge run by hand under a `diff3` conflict style.
-- **A missing or escaping local Markdown link.** `tools/validate-skills.mjs` resolves bare, `./`, `../`, and reference-style targets against their Markdown file. Every local target must exist inside `plugins/pstack/skills`.
-- **Prose naming a plugin file the install does not carry.** The same tool resolves every backticked relative path against its Markdown file and against the plugin root. A token that lands on a real file or directory outside `plugins/pstack/skills` (`agents/comment-sicko.md`, `../../hooks/hooks.json`) fails. Tokens that resolve to nothing (placeholders, slash commands, `plugins/pstack/models.json` maintainer notes) pass. A Markdown link is caught by the link check; this covers the backticked form that is not a link.
-- **A shell script that fails shellcheck.** Every `.sh` file outside `node_modules` is linted at warning severity.
-- **An action pinned to a tag.** Use the full 40-character commit SHA with a version comment. A mutable tag can be force-pushed into our runners.
-- **A Markdown correctness error.** Reversed link syntax, an empty link target, a missing image alt, a fragment link to a heading that is not there, or an undefined or unused reference definition. The rule set is deliberately correctness-only and lives in `.markdownlint-cli2.jsonc`. Run `pnpm dlx markdownlint-cli2@0.18.1 '**/*.md'`.
-- **A broken relative link in any Markdown file.** The link job resolves file and fragment targets offline and never touches a remote URL, so external link rot cannot fail your PR. Run `lychee --offline --include-fragments --exclude-path node_modules --exclude-path .git '**/*.md'`.
-
-## Dependency updates
-
-Dependabot keeps the pinned action SHAs current. The vendored scripts' one runtime dependency (`commander`) follows upstream's pin and moves with `tools/sync.mjs`; `osv-scanner` scans the root pnpm lockfile and vendored Bun lockfile weekly, so a CVE still surfaces. The root `pnpm-lock.yaml` pins `typebox`, which the generator and the Pi extension tests import. If you bump it by hand, run `pnpm install` and commit the resulting `pnpm-lock.yaml` in the same change.
+Report exact checks run, skipped checks, and material limits in the PR. Bug reports should include the Lucas Kit version, host version, and reproduction steps.
 
 ## Releasing
 
-Plugin auto-update installs **by version number**, not by tracking `main`. A skill fix merged without a version bump is inert on every installed copy, because the updater sees the same version it already has and does nothing.
+Plugin auto-update installs by version number. A skill behavior change must bump the version or be followed by a release PR. Edit `VERSION`, add a `## <version> - <title>` entry to `CHANGES.md`, then run `pnpm generate`. Run the relevant checks above before releasing; do not describe a skipped live check as passed.
 
-So: any PR that changes skill behavior either bumps the version itself or is followed by a release PR that does. The bump is three steps: edit the root `VERSION` file, add a `CHANGES.md` entry under a `## <version>` heading describing what changed and why, and run `pnpm generate` to stamp the manifests. Forgetting any of the three fails CI. Run the full invariant script (including the behavioral leg) before merging.
+Merging a `VERSION` change to `main` runs [release.yml](.github/workflows/release.yml); manual dispatch also requires `main`. It validates the tree, builds the skills archive with `pnpm pack:skills`, stages it on npm through trusted publishing, then attests and publishes a GitHub release.
 
-Merging a `VERSION` change to `main` runs `.github/workflows/release.yml`, which you can also start by hand from the Actions tab. It reruns the generated-file check and the tests, builds the archive with `pnpm pack:skills`, and then:
+Staging does not make the npm version available to consumers. A maintainer must approve it with 2FA under Staged Packages on npmjs.com or with `pnpm stage approve <stage-id>`. The GitHub release can therefore exist before the npm package is approved. Do not publish the private development checkout directly.
 
-1. Stages `@aranlucas/kit-skills@<version>` on npm using `pnpm stage publish` through trusted publishing, with provenance. The job runs in the `npm` environment, needs no token, and installs no project dependencies. Staging does not release the version. Approve it with 2FA under Staged Packages on npmjs.com, or with `pnpm stage approve <stage-id>`.
-2. Attests the archive and publishes the GitHub release `v<version>` on the merged commit. The release attaches the archive and uses the version's `CHANGES.md` entry as its notes.
+### Recovery
 
-Published versions and published GitHub releases are skipped, and an existing GitHub draft is resumed. If npm staging succeeded before a later failure, approve or reject the pending stage before starting a new workflow run: pending stages reserve their version but are invisible to `pnpm view`, and npm does not allow listing stages with OIDC. You can also rerun only the failed GitHub job to reuse the successful staging job. Never run `pnpm publish` from the checkout: the root `package.json` is `private` because it is the development tree, not the skills package.
+Published npm versions and GitHub releases are skipped; an existing GitHub draft is resumed. If staging succeeded before a later failure, approve or reject the pending stage before starting a new workflow run. Pending stages reserve their version but are invisible to `pnpm view`, and OIDC cannot list them. Rerunning only the failed GitHub job reuses the successful staging job.
 
-One-time setup before the first release:
+Assemble assets in a draft before publication: immutable releases lock the tag and assets. Keep dependency execution in the build job and publishing permissions in the isolated publishing jobs.
 
-- On npmjs.com, add a trusted publisher for the package. Use repository `aranlucas/lucas-kit`, workflow `release.yml`, and environment `npm`, and allow `npm stage publish` only: `npm trust github @aranlucas/kit-skills --repo aranlucas/lucas-kit --file release.yml --env npm --allow-stage-publish`. Then require 2FA and disallow tokens under the package's publishing access.
-- In the repository settings, enable immutable releases, and limit the `npm` environment's deployment branches to `main`.
+### One-time setup
 
-## Commit and PR style
-
-- Explain what changed and why. The diff already shows how.
-- One concern per PR. A behavior fix and a refactor in the same diff are two separate reviews, and reviewing them together means doing neither properly.
-- Claim only what you verified, and name the check. "52/52 tests pass" beats "tests pass"; "did not run the behavioral leg" beats silence.
-
-## Reporting bugs
-
-Include the pstack version, the Claude Code (or Codex, Pi, or GitHub Copilot) version, and the reproduction steps. [#22](https://github.com/michael-denyer/pstack-claude/issues/22) is the model to copy: it named versions, gave numbered steps, and included the experiment that isolated the cause.
+- On npmjs.com, configure the trusted publisher for `aranlucas/lucas-kit`, workflow `release.yml`, environment `npm`, allowing staged publication: `npm trust github @aranlucas/kit-skills --repo aranlucas/lucas-kit --file release.yml --env npm --allow-stage-publish`. Require 2FA and disallow publishing tokens for the package.
+- Enable immutable GitHub releases and restrict the `npm` environment's deployment branches to `main`.
