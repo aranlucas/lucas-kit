@@ -1,6 +1,6 @@
 # Security
 
-Report a vulnerability through [GitHub's private vulnerability reporting form](https://github.com/michael-denyer/pstack-claude/security/advisories/new), which is enabled on this repository. Please do not open a public issue for a vulnerability, because the issue tracker is public from the moment you press submit. A private advisory keeps the details between us until a fix is released.
+Do not disclose vulnerability details in a public issue. Use **Report a vulnerability** on [Lucas Kit's security page](https://github.com/aranlucas/lucas-kit/security) when available. If private reporting is unavailable, ask [the maintainer](https://github.com/aranlucas) to establish a private channel, without including exploit details or secrets. Upstream pstack-claude's advisory form is for findings in that project, not a private inbox for this fork.
 
 The skill tree, the hooks, the vendored Node.js scripts under `plugins/pstack/skills/poteto-mode/scripts`, and the CI workflows are all in scope. Anything that makes an agent run a command the user did not intend, exfiltrate a secret, or reach outside the repository it was pointed at counts, as does a supply-chain weakness in how this repository pins and installs its own dependencies. Findings in Claude Code itself belong to Anthropic, and findings in the upstream project this repository syncs from belong upstream.
 

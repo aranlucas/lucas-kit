@@ -36,7 +36,7 @@ skills:
 Install and approve the archive:
 
 ```shell
-pnpm add -D ./vendor/aranlucas-kit-skills-1.0.14.tgz
+pnpm add -D ./vendor/aranlucas-kit-skills-1.0.16.tgz
 pnpm approve
 pnpm install
 ```
@@ -45,7 +45,7 @@ Select the skills capability for `@aranlucas/kit-skills`. Local archives use a p
 
 ```yaml
 permissions:
-  '@aranlucas/kit-skills@file:vendor/aranlucas-kit-skills-1.0.14.tgz':
+  '@aranlucas/kit-skills@file:vendor/aranlucas-kit-skills-1.0.16.tgz':
     skills: true
 ```
 
@@ -59,7 +59,7 @@ Build each update with a new version and filename. Copy it into `vendor/`, add t
 
 `pnpm remove -D @aranlucas/kit-skills` removes the managed links. Setting the source's skills permission to `false` and running `pnpm install` also removes them.
 
-## Verify or publish
+## Verify
 
 ```shell
 PSTACK_REQUIRE_PNPM_SKILLS=1 pnpm test:pnpm
@@ -67,10 +67,4 @@ PSTACK_REQUIRE_PNPM_SKILLS=1 pnpm test:pnpm
 
 The tests compare every packaged resource's bytes and executable bits, then check scoped link names, approvals, sibling references, a frozen offline reinstall, and revocation. Requiring the integration test makes an older or missing pnpm fail instead of skip.
 
-For a registry release, review the built archive and publish that artifact:
-
-```shell
-pnpm publish ./dist/aranlucas-kit-skills-1.0.14.tgz --access public
-```
-
-Use the current release version in both the archive name and installation examples. Registry approval is keyed by package name rather than the local archive's source; see the README's configuration.
+Registry releases use the [staged release workflow](../CONTRIBUTING.md#releasing). Building or vendoring an archive does not publish it; do not publish directly from the development checkout.
