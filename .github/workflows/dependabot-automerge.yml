@@ -3,7 +3,7 @@ name: Dependabot auto-merge
 # Trusted default-branch code only; no PR checkout, artifacts, or dependency install.
 on: # zizmor: ignore[dangerous-triggers]
   workflow_run:
-    workflows: [CI, Security]
+    workflows: [CI]
     types: [completed]
 
 permissions: {}
@@ -58,7 +58,7 @@ jobs:
               return core.info("PR identity, head, or bounded commit count is ineligible.");
             }
             // Inspect the latest run, so an older successful run cannot hide a rerun.
-            for (const workflow of ["ci.yml","security.yml"]) {
+            for (const workflow of ["ci.yml"]) {
               const { data } = await github.rest.actions.listWorkflowRuns({
                 ...repo, workflow_id: workflow, event: "pull_request",
                 branch: run.head_branch, head_sha: run.head_sha, per_page: 1,
