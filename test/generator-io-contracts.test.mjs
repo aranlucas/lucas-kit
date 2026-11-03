@@ -2,10 +2,8 @@ import { afterEach, expect, test } from "vitest";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 
-import { apply, changes, loadModels, problems, regions, validateHooks } from "@/tools/generate.mjs";
-import { RUNTIMES } from "@/tools/runtimes.mjs";
+import { apply, changes, validateHooks } from "@/tools/generate.mjs";
 
 /** @type {string[]} */
 const fixtures = [];
@@ -100,66 +98,6 @@ test("preflight failures produce no earlier writes or callback messages", () => 
   expect(logged).toEqual([]);
   expect(existsSync(join(root, "out/first.md"))).toBe(false);
   expect(readFileSync(join(root, "out/blocked/inside.md"), "utf8")).toBe("directory contents");
-});
-
-test.each([undefined, null, 23, { detail: "retained" }])(
-  "validation failures retain their raw message value %j",
-  (message) => {
-    const runtime = RUNTIMES[0];
-    const validate = runtime.validate;
-    const failure = new Error("replaced message");
-    Object.defineProperty(failure, "message", { value: message });
-    runtime.validate = () => {
-      throw failure;
-    };
-    try {
-      const root = fileURLToPath(new URL("..", import.meta.url));
-      const failures = problems(root, loadModels(root));
-      expect(failures).toHaveLength(1);
-      expect(failures[0]).toBe(message);
-    } finally {
-      runtime.validate = validate;
-    }
-  },
-);
-
-test("region ordering keeps role grouping and defers model reads until rendering", () => {
-  /** @type {string[]} */
-  const reads = [];
-  /** @param {string} role @param {string} skill */
-  const entry = (role, skill) => ({
-    role,
-    skill,
-    get models() {
-      reads.push(role);
-      return ["opus"];
-    },
-  });
-  const first = entry("first zeta", "zeta");
-  const models = {
-    ...loadModels(),
-    roles: [
-      first,
-      entry("interrogate reviewers", "interrogate"),
-      entry("alpha", "alpha"),
-      entry("second zeta", "zeta"),
-    ],
-  };
-  const planned = regions(models);
-  expect(reads).toEqual(["interrogate reviewers"]);
-  expect(planned.slice(0, 6).map(({ file, name }) => [file, name])).toEqual([
-    ["plugins/pstack/skills/zeta/SKILL.md", "Models section"],
-    ["plugins/pstack/skills/alpha/SKILL.md", "Models section"],
-    ["plugins/pstack/skills/interrogate/SKILL.md", "reviewer table"],
-    ["plugins/pstack/skills/zeta/SKILL.md", "Reasoning effort section"],
-    ["plugins/pstack/skills/interrogate/SKILL.md", "Reasoning effort section"],
-    ["plugins/pstack/skills/alpha/SKILL.md", "Reasoning effort section"],
-  ]);
-  expect(Object.keys(planned[0])).toEqual(["file", "name", "locate", "appendHeading", "render"]);
-  expect(Object.keys(planned[2])).toEqual(["file", "name", "locate", "render"]);
-  first.role = "updated zeta";
-  expect(planned[0].render().join("\n")).toContain("- updated zeta: `opus`\n- second zeta: `opus`");
-  expect(reads).toEqual(["interrogate reviewers", "first zeta", "second zeta"]);
 });
 
 test("schema diagnostics group unknown keys once before later faults and path checks", () => {

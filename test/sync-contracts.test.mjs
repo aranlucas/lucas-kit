@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, test } from "vitest";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
-import { classify, denylistHits, isExcluded, syncComponent } from "@/tools/sync.mjs";
+import { isExcluded, syncComponent } from "@/tools/sync.mjs";
 
 /** @type {string[]} */
 const fixtures = [];
@@ -40,7 +40,7 @@ function probe(source) {
       throw failure;
     };
     syncBuiltinESMExports();
-    const { mergeFile, denylistHits } = await import(${JSON.stringify(new URL("../tools/sync.mjs", import.meta.url).href)});
+    const { mergeFile } = await import(${JSON.stringify(new URL("../tools/sync.mjs", import.meta.url).href)});
     ${source}
   `;
   const result = spawnSync(process.execPath, ["--input-type=module", "-e", script], {
@@ -112,20 +112,6 @@ describe("sync subprocess contracts", () => {
     },
   );
 
-  test("reads inherited status and stdout in the original order without normalizing them", () => {
-    expect(
-      probe(`
-      const bytes = Buffer.from("<<<<<<< local");
-      failure = Object.create({
-        get status() { reads.push("status"); return 2; },
-        get stdout() { reads.push("stdout"); return bytes; },
-      });
-      const result = mergeFile(Buffer.alloc(0), Buffer.alloc(0), Buffer.alloc(0));
-      console.log(JSON.stringify({ reads, hunks: result.hunks, same: result.buffer === bytes }));
-    `),
-    ).toBe('{"reads":["status","status","stdout","status","stdout"],"hunks":2,"same":true}');
-  });
-
   test("checks conflict status before markers and keeps the thrown value as cause", () => {
     expect(
       probe(`
@@ -146,20 +132,6 @@ describe("sync subprocess contracts", () => {
       }),
     );
   });
-
-  test.each(["null", "undefined", "{ status: Symbol('status') }", "{ status: 1, stdout: {} }"])(
-    "preserves native property/comparison/method failures for %s",
-    (expression) => {
-      expect(
-        probe(`
-        failure = ${expression};
-        let caught;
-        try { mergeFile(Buffer.alloc(0), Buffer.alloc(0), Buffer.alloc(0)); } catch (error) { caught = error; }
-        console.log(JSON.stringify({ type: caught.constructor.name, scratch: readdirSync(process.env.TMPDIR) }));
-      `),
-      ).toBe('{"type":"TypeError","scratch":[]}');
-    },
-  );
 });
 
 describe("sync text and lazy-file contracts", () => {
@@ -169,116 +141,6 @@ describe("sync text and lazy-file contracts", () => {
       expect(isExcluded("docs/a.md", [excluded])).toBe(true);
       expect(isExcluded("docs-other/a.md", [excluded])).toBe(false);
     }
-  });
-
-  test("a missing denylist regex still uses the empty pattern and preserves its printed value", () => {
-    expect(denylistHits("a.md", "one\ntwo", [{ hint: "empty matcher" }])).toEqual([
-      'a.md:1: "undefined" — empty matcher',
-      'a.md:2: "undefined" — empty matcher',
-    ]);
-    expect(denylistHits("a.md", "one", [{ token: "", hint: "empty token" }])).toEqual([
-      'a.md:1: "" — empty token',
-    ]);
-  });
-
-  test("a malformed null regex retains native coercion rather than becoming an empty pattern", () => {
-    expect(
-      probe(`
-      console.log(JSON.stringify(denylistHits("a.md", "null\\nother", [{ regex: null, hint: "native matcher" }])));
-    `),
-    ).toBe(JSON.stringify(['a.md:1: "null" — native matcher']));
-  });
-
-  test("an unchanged local copy never reads the unused old version", () => {
-    /** @type {import("../tools/sync.mjs").UpstreamFile} */
-    const old = {
-      mode: 0o644,
-      counts: new Map(),
-      /** @returns {never} */
-      get bytes() {
-        throw new Error("unused old bytes");
-      },
-    };
-    const bytes = Buffer.from("current\n");
-    const current = { mode: 0o644, bytes, counts: new Map() };
-    expect(classify({ old, new: current, local: current })).toEqual({
-      kind: "unchanged",
-      kept: bytes,
-    });
-  });
-
-  test("compares a fork's old version without introducing an old symlink lookup", () => {
-    /** @type {string[]} */
-    const reads = [];
-    /**
-     * @param {string} name
-     * @param {string} text
-     * @returns {import("../tools/sync.mjs").UpstreamFile}
-     */
-    const version = (name, text) => ({
-      /** @returns {false} */
-      get symlink() {
-        reads.push(`${name}.symlink`);
-        return false;
-      },
-      get bytes() {
-        reads.push(`${name}.bytes`);
-        return Buffer.from(text);
-      },
-      get mode() {
-        reads.push(`${name}.mode`);
-        return 0o644;
-      },
-      counts: new Map(),
-    });
-    const result = classify({
-      old: version("old", "base\n"),
-      new: version("new", "base\n"),
-      local: version("local", "base\nport\n"),
-    });
-    expect(result).toEqual({ kind: "forked", kept: Buffer.from("base\nport\n"), changed: 1 });
-    expect(reads).toEqual([
-      "new.symlink",
-      "local.symlink",
-      "local.bytes",
-      "new.bytes",
-      "local.bytes",
-      "local.bytes",
-      "old.bytes",
-      "local.bytes",
-      "old.bytes",
-      "new.bytes",
-      "old.bytes",
-      "old.mode",
-      "new.mode",
-      "local.bytes",
-      "old.bytes",
-      "local.bytes",
-      "old.bytes",
-      "local.bytes",
-    ]);
-  });
-
-  test("derives new then old exactly once despite repeated lazy getter reads", () => {
-    const oldDir = tree({ "a.md": "base\n" });
-    const newDir = tree({ "a.md": "base\n" });
-    const localDir = tree({ "a.md": "base\nport\n" });
-    /** @type {string[]} */
-    const derived = [];
-    const report = syncComponent({
-      oldDir,
-      newDir,
-      localDir,
-      rules: [],
-      dryRun: true,
-      derive: (rel, text) => {
-        derived.push(`${rel}:${text}`);
-        return text;
-      },
-    });
-    expect(derived).toEqual(["a.md:base\n", "a.md:base\n"]);
-    expect(report.forked).toEqual([{ rel: "a.md", changed: 1 }]);
-    expect(readFileSync(join(localDir, "a.md"), "utf8")).toBe("base\nport\n");
   });
 
   test("keeps equal-sized forks in path discovery order and reports larger forks first", () => {

@@ -176,7 +176,7 @@
     },
     "plugins/pstack/skills/poteto-mode/scripts/watch-pr/github.test.ts": {
       "kind": "policy",
-      "why": "Covers the port's GitHub reader: completed conclusions that gh buckets as pending, a checkout PR paired with a different explicit repository, a full open-PR page refused as a possibly cut stack, a stack that never takes a PR headed at the default branch as parent, child, or seed under the default branch the repository reports, while a fork branch of the same name still stacks, a check-rollup cursor that repeats or returns to an earlier page, a review-thread cursor that repeats, a review-thread page that promises more pages without a cursor, a binary that cannot be spawned, the base revision field, and a no-checks reading that needs both check reads to agree and fails closed otherwise. Runs the existing assertions under Vitest. Verifies missing rawValue omission, detail-before-raw serialization, and lazy reread fixture access.",
+      "why": "Covers the port's GitHub reader: completed conclusions that gh buckets as pending, a checkout PR paired with a different explicit repository, a full open-PR page refused as a possibly cut stack, a stack that never takes a PR headed at the default branch as parent, child, or seed under the default branch the repository reports, while a fork branch of the same name still stacks, a check-rollup cursor that repeats or returns to an earlier page, a review-thread cursor that repeats, a review-thread page that promises more pages without a cursor, a binary that cannot be spawned, the base revision field, and a no-checks reading that needs both check reads to agree and fails closed otherwise. Runs the retained behavioral assertions under Vitest, including missing rawValue diagnostics. Prunes a local fake-reader self-test and synthetic serialization/getter-order checks; real JSON parsing, review-thread filtering, pagination, and revision-change contracts remain.",
       "since": "0.9.24",
       "upstream": "not-proposed"
     },
@@ -280,6 +280,12 @@
       "kind": "policy",
       "why": "Prefixes a cell opening with a double quote so a spreadsheet or TSV reader cannot parse it as a quoted field, appends each row through one perl syswrite so parallel writers cannot interleave rows longer than the shell's stdio buffer, reports a short or failed write, and falls back to upstream's printf when perl is missing or does not work.",
       "since": "0.9.41",
+      "upstream": "not-proposed"
+    },
+    "plugins/pstack/skills/statechart/scripts/test/statechart.test.mjs": {
+      "kind": "policy",
+      "why": "Removes the source-file line-count guard, which constrains internal module layout rather than statechart behavior. Retains every parser, TLC, chart, rendering, replay, and publication-safety scenario, including existing failing checks.",
+      "since": "1.0.16",
       "upstream": "not-proposed"
     },
     "plugins/pstack/skills/tdd/SKILL.md": {

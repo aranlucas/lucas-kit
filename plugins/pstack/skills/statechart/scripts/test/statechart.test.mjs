@@ -6841,14 +6841,3 @@ test(
     assert.deepEqual(staged(dir), []);
   },
 );
-
-test("no file in scripts/ passes 1000 lines", () => {
-  const long = readdirSync(scripts, { withFileTypes: true })
-    .filter((e) => e.isFile())
-    .map((e) => [
-      e.name,
-      readFileSync(join(scripts, e.name), "utf8").replace(/\n$/, "").split("\n").length,
-    ])
-    .filter(([, lines]) => lines > 1000);
-  assert.deepEqual(long, [], "move cohesive parts of each listed file into their own modules");
-});
