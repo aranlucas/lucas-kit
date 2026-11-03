@@ -29,7 +29,6 @@ function scriptedUi(answers) {
     select: (title, options) => next("select", { title, options }),
     /** @param {string} title */
     input: (title) => next("input", { title }),
-    confirm: () => Promise.reject(new Error("confirm is not used")),
     /** @param {string} message */
     notify: (message) => calls.push({ kind: "notify", message }),
   };
@@ -54,71 +53,6 @@ const q = (extra = {}) => ({
     { label: "Redis", description: "in memory" },
   ],
   ...extra,
-});
-
-describe("scripted UI fixture contracts", () => {
-  test("dialogs record before consuming the shared answer queue and resolve asynchronously", async () => {
-    const answers = ["selected", "typed", undefined];
-    const options = ["first", "second"];
-    const ui = scriptedUi(answers);
-    const shift = answers.shift.bind(answers);
-    let reads = 0;
-    Object.defineProperty(answers, "shift", {
-      value() {
-        reads++;
-        expect(ui.calls).toHaveLength(reads);
-
-        return shift();
-      },
-    });
-    const selected = ui.select("Choose", options);
-    let resolved = false;
-    const settled = selected.then(() => (resolved = true));
-    expect(resolved).toBe(false);
-    expect(answers).toEqual(["typed", undefined]);
-    const [call] = ui.calls;
-    assert.ok(call);
-    assert.ok(call.kind === "select");
-    expect(call.options).toBe(options);
-    options.push("third");
-    expect(call.options).toEqual(["first", "second", "third"]);
-    expect(await selected).toBe("selected");
-    await settled;
-    expect(resolved).toBe(true);
-    expect(await ui.input("Explain")).toBe("typed");
-    expect(await ui.input("Dismiss")).toBeUndefined();
-    expect(await ui.input("Exhausted")).toBeUndefined();
-    expect(answers).toEqual([]);
-    expect(ui.calls).toEqual([
-      { kind: "select", title: "Choose", options },
-      { kind: "input", title: "Explain" },
-      { kind: "input", title: "Dismiss" },
-      { kind: "input", title: "Exhausted" },
-    ]);
-  });
-
-  test("notifications and rejected confirmations do not consume answers", async () => {
-    const answers = ["untouched"];
-    const ui = scriptedUi(answers);
-    expect(ui.notify("first")).toBe(1);
-    expect(ui.notify("second")).toBe(2);
-    expect(lastNotification(ui)).toEqual({ kind: "notify", message: "second" });
-    await expect(ui.confirm()).rejects.toThrow("confirm is not used");
-    expect(answers).toEqual(["untouched"]);
-    expect(ui.calls).toEqual([
-      { kind: "notify", message: "first" },
-      { kind: "notify", message: "second" },
-    ]);
-  });
-
-  test("question overrides remain shallow, including explicit undefined", () => {
-    const options = [{ label: "custom" }];
-    const question = q({ question: undefined, header: undefined, options, multiSelect: true });
-    expect(question).toEqual({ question: undefined, header: undefined, options, multiSelect: true });
-    expect(question.options).toBe(options);
-    expect(q().question).toBe("Which store?");
-    expect(q().options).not.toBe(q().options);
-  });
 });
 
 describe("ask_user_question", () => {

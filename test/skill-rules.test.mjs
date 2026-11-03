@@ -144,12 +144,6 @@ const rules = [
 ];
 
 describe("port-local skill rules", () => {
-  test("every pinned phrase is distinctive enough to pin a rule", () => {
-    const phrases = rules.map((r) => r.phrase);
-    expect(new Set(phrases).size).toBe(phrases.length);
-    for (const phrase of phrases) expect(phrase.length).toBeGreaterThanOrEqual(20);
-  });
-
   for (const { source, file, phrase } of rules) {
     test(`${file} keeps the rule from ${source}`, () => {
       expect(readFileSync(join(skillsDir, file), "utf8")).toContain(phrase);

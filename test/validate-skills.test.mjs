@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, relative } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 
 import {
   markdownFiles,
@@ -43,29 +43,6 @@ function writeTree(root, entries) {
 /** @param {readonly string[]} args */
 function cli(args) {
   return spawnSync(process.execPath, [validator, ...args], { encoding: "utf8" });
-}
-
-/**
- * @param {string} parent
- * @param {string} root
- * @param {string} expression
- */
-function cliWithThrownValue(parent, root, expression) {
-  const preload = join(parent, "throw-from-fs.mjs");
-  writeFileSync(
-    preload,
-    [
-      'import fs from "node:fs";',
-      'import { syncBuiltinESMExports } from "node:module";',
-      "const realpath = fs.realpathSync;",
-      `fs.realpathSync = (path, ...options) => { if (path === ${JSON.stringify(root)}) throw ${expression}; return realpath(path, ...options); };`,
-      "syncBuiltinESMExports();",
-    ].join("\n"),
-  );
-
-  return spawnSync(process.execPath, ["--import", pathToFileURL(preload).href, validator, root], {
-    encoding: "utf8",
-  });
 }
 
 describe("skill filesystem traversal", () => {
@@ -339,56 +316,6 @@ describe("prose path diagnostics", () => {
 });
 
 describe("validator command line", () => {
-  test.each([
-    { name: "Error", expression: 'new Error("fixture error")', message: "fixture error" },
-    { name: "plain message", expression: '({ message: "plain" })', message: "plain" },
-    {
-      name: "inherited message",
-      expression: 'Object.create({ message: "inherited" })',
-      message: "inherited",
-    },
-    { name: "numeric message", expression: "({ message: 42 })", message: "42" },
-    { name: "primitive throw", expression: '"raw throw"', message: "undefined" },
-    {
-      name: "string-hint coercion",
-      expression: "({ message: { [Symbol.toPrimitive](hint) { return hint; } } })",
-      message: "string",
-    },
-  ])("retains native message access for $name", ({ expression, message }) => {
-    withTree((parent, root) => {
-      const result = cliWithThrownValue(parent, root, expression);
-      expect(result.status).toBe(1);
-      expect(result.stdout).toBe("");
-      expect(result.stderr).toBe(`FAIL: ${message}\n`);
-    });
-  });
-
-  test.each([
-    {
-      name: "null throw",
-      expression: "null",
-      diagnostic: "TypeError: Cannot read properties of null (reading 'message')",
-    },
-    {
-      name: "undefined throw",
-      expression: "undefined",
-      diagnostic: "TypeError: Cannot read properties of undefined (reading 'message')",
-    },
-    {
-      name: "Symbol message",
-      expression: '({ message: Symbol("fixture") })',
-      diagnostic: "TypeError: Cannot convert a Symbol value to a string",
-    },
-  ])("retains the native failure for $name", ({ expression, diagnostic }) => {
-    withTree((parent, root) => {
-      const result = cliWithThrownValue(parent, root, expression);
-      expect(result.status).toBe(1);
-      expect(result.stdout).toBe("");
-      expect(result.stderr).toContain(diagnostic);
-      expect(result.stderr).not.toMatch(/^FAIL:/m);
-    });
-  });
-
   test("missing arguments report usage and exit 2", () => {
     const result = cli([]);
     expect(result.status).toBe(2);

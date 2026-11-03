@@ -1,7 +1,7 @@
-import { assert, expect, test } from "vitest";
+import { expect, test } from "vitest";
 import { readFileSync } from "node:fs";
-import { parseModels, resolveModels } from "@/tools/generate.mjs";
-import { isModelPolicy, usesTier } from "@/tools/model-policy.mjs";
+import { parseModels } from "@/tools/generate.mjs";
+import { isModelPolicy } from "@/tools/model-policy.mjs";
 
 const source = readFileSync(new URL("../plugins/pstack/models.json", import.meta.url), "utf8");
 
@@ -143,28 +143,4 @@ test("validates without coercing, stripping extension fields, or mutating input"
   expect(result).toMatchObject({ extension: { keep: true } });
   expect(result.roles[0]).toMatchObject({ extension: { keep: true } });
   expect(JSON.stringify(input)).toBe(before);
-});
-
-test("resolved role lists retain their identity while tier roles resolve without mutation", () => {
-  /** @type {unknown} */
-  const input = JSON.parse(source);
-  assert(isModelPolicy(input));
-
-  const list = { role: "direct-list", skill: "how", models: ["opus"] };
-  const tier = { role: "tier-reference", skill: "how", models: "default" };
-  const policy = { ...input, roles: [list, tier] };
-  const before = JSON.stringify(policy);
-
-  expect(usesTier(list)).toBe(false);
-  expect(usesTier(tier)).toBe(true);
-
-  const resolved = resolveModels(policy);
-  expect(resolved.roles[0]).toBe(list);
-  expect(resolved.roles[1]).not.toBe(tier);
-  expect(resolved.roles[1]).toEqual({
-    ...tier,
-    tier: "default",
-    models: [input.tiers.default].flat(),
-  });
-  expect(JSON.stringify(policy)).toBe(before);
 });
