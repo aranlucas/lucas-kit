@@ -28,7 +28,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Set up Node.js and pnpm dependencies
-        uses: pnpm/setup@a0881977cd8ea73b1ed212236c99ca10dcc80cf4 # v3.1.1
+        uses: pnpm/setup@fa36a5ef7dcdefc3a7cb25655c122e00cf6e636e # v3.1.2
         with:
           runtime: node@26
           require-lockfile: true
@@ -54,7 +54,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Set up Node.js and pnpm dependencies
-        uses: pnpm/setup@a0881977cd8ea73b1ed212236c99ca10dcc80cf4 # v3.1.1
+        uses: pnpm/setup@fa36a5ef7dcdefc3a7cb25655c122e00cf6e636e # v3.1.2
         with:
           runtime: node@26
           require-lockfile: true
@@ -113,7 +113,7 @@ jobs:
       # enough: the CLI copies the same bytes for every agent, and the
       # generated job already validated the source tree's links and prose.
       - name: Set up Node.js and pnpm
-        uses: pnpm/setup@a0881977cd8ea73b1ed212236c99ca10dcc80cf4 # v3.1.1
+        uses: pnpm/setup@fa36a5ef7dcdefc3a7cb25655c122e00cf6e636e # v3.1.2
         with:
           runtime: node@26
           install: false
@@ -134,7 +134,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Set up Node.js and pnpm dependencies
-        uses: pnpm/setup@a0881977cd8ea73b1ed212236c99ca10dcc80cf4 # v3.1.1
+        uses: pnpm/setup@fa36a5ef7dcdefc3a7cb25655c122e00cf6e636e # v3.1.2
         with:
           runtime: node@26
           require-lockfile: true
@@ -175,7 +175,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Set up Node.js and pnpm dependencies
-        uses: pnpm/setup@a0881977cd8ea73b1ed212236c99ca10dcc80cf4 # v3.1.1
+        uses: pnpm/setup@fa36a5ef7dcdefc3a7cb25655c122e00cf6e636e # v3.1.2
         with:
           runtime: node@26
           working-directory: plugins/pstack/skills/poteto-mode/scripts
@@ -218,7 +218,7 @@ jobs:
       # Rule selection and the reasoning behind it live in
       # .markdownlint-cli2.jsonc, which the tool picks up from the repo root.
       - name: Set up Node.js and pnpm
-        uses: pnpm/setup@a0881977cd8ea73b1ed212236c99ca10dcc80cf4 # v3.1.1
+        uses: pnpm/setup@fa36a5ef7dcdefc3a7cb25655c122e00cf6e636e # v3.1.2
         with:
           runtime: node@26
           install: false
