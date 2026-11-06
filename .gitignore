@@ -28,3 +28,6 @@ plugins/pstack/skills/poteto-mode/scripts/node_modules/
 
 # Compiled standalone skill tools
 /plugins/pstack/skills/poteto-mode/scripts/dist/
+
+# e2e runner reports and replay cache
+/.e2e/
