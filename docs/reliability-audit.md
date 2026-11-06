@@ -88,7 +88,16 @@ another handwritten general-purpose parser.
 
 ## Evidence and outcome
 
-Pending CI and independent review. No local test/build results are claimed.
+[CI run 42301563971](https://github.com/aranlucas/lucas-kit/actions/runs/42301563971)
+validated the implementation at `d6deefe`: both fence regressions failed on the
+baseline with the expected truncated-body diffs, all 11 fixed release tests
+passed, the real e2e CLI journey passed, and the distribution build succeeded.
+[Evidence artifact](https://github.com/aranlucas/lucas-kit/actions/runs/42301563971/artifacts/13543343805)
+contains the baseline log and e2e report/JUnit results. Remaining repository gates
+must also pass on the final PR head before merge.
+
+[PR #41](https://github.com/aranlucas/lucas-kit/pull/41) contains this audit and fix.
+No local test/build results are claimed.
 
 Independent review completed across the listed surfaces and challenged R1 and
 its implementation. No additional concrete worthwhile finding was identified.
