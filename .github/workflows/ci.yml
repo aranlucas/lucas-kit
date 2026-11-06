@@ -44,6 +44,52 @@ jobs:
           PSTACK_PI_REQUIRE_CATALOG: "1"
           PSTACK_PI_REQUIRE_RUNTIME: "1"
 
+  reliability:
+    name: Reliability regressions and CLI e2e
+    if: ${{ github.event.pull_request.draft != true }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Set up Node.js and pnpm dependencies
+        uses: pnpm/setup@fa36a5ef7dcdefc3a7cb25655c122e00cf6e636e # v3.1.2
+        with:
+          runtime: node@26
+          require-lockfile: true
+      - name: Demonstrate release regression against the audited baseline
+        run: |
+          set -euo pipefail
+          cp tools/release-notes.mjs "$RUNNER_TEMP/release-notes-fixed.mjs"
+          trap 'cp "$RUNNER_TEMP/release-notes-fixed.mjs" tools/release-notes.mjs' EXIT
+          git show 505362617d36dbf0a5e7e1fa78296cbbef2f02c4:tools/release-notes.mjs > tools/release-notes.mjs
+          if pnpm exec vitest run test/release-notes.test.mjs --testNamePattern 'preserves headings inside' > "$RUNNER_TEMP/release-baseline.log" 2>&1; then
+            cat "$RUNNER_TEMP/release-baseline.log"
+            echo "Expected both fenced release regressions to fail on the audited baseline"
+            exit 1
+          fi
+          cat "$RUNNER_TEMP/release-baseline.log"
+          grep -q '2 failed' "$RUNNER_TEMP/release-baseline.log"
+      - name: Check fixed release behavior
+        run: pnpm exec vitest run test/release-notes.test.mjs
+      - name: Exercise real release CLI success and failure paths
+        run: pnpm exec e2e run --reporter list,junit
+      - name: Build the distributable skills archive
+        run: pnpm build
+      - name: Upload CLI reports and baseline evidence
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reliability-evidence
+          include-hidden-files: true
+          path: |
+            .e2e/
+            ${{ runner.temp }}/release-baseline.log
+          if-no-files-found: error
+          retention-days: 7
+
   forks:
     name: Fork registry
     if: ${{ github.event.pull_request.draft != true }}

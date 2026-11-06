@@ -46,3 +46,26 @@ test("the current VERSION has notes", () => {
   const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
   expect(releaseNotes(read("CHANGES.md"), read("VERSION").trim()).body).not.toBe("");
 });
+
+// Release bodies are raw Markdown: examples are content, never release boundaries.
+test.each(["```markdown", "~~~~markdown"])("preserves headings inside %s examples", (fence) => {
+  const close = fence.startsWith("`") ? "```" : "~~~~";
+  const body = `Before.\n\n${fence}\n## 9.9.9 - Example\n${close}\n\nAfter.`;
+  expect(releaseNotes(`## 1.0.2 - Real\n\n${body}\n\n## 1.0.1\nOld.`, "1.0.2"))
+    .toEqual({ title: "v1.0.2 - Real", body });
+});
+
+test("a fenced release heading cannot supply a missing release", () => {
+  expect(() => releaseNotes("```md\n## 9.9.9 - Example\n```\n\n## 1.0.2\nReal.", "9.9.9"))
+    .toThrow('CHANGES.md has no "## 9.9.9" entry');
+});
+
+test("a fenced duplicate before the actual release cannot replace its notes", () => {
+  expect(releaseNotes("```md\n## 1.0.2 - Example\n```\n\n## 1.0.2 - Real\nActual notes.", "1.0.2"))
+    .toEqual({ title: "v1.0.2 - Real", body: "Actual notes." });
+});
+
+test("CRLF headings preserve exact release identity", () => {
+  expect(releaseNotes("## 1.0.2\r\n\r\nNotes.\r\n\r\n## 1.0.1\r\nOld.", "1.0.2"))
+    .toEqual({ title: "v1.0.2", body: "Notes." });
+});
