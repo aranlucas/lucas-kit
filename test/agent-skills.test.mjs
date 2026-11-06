@@ -216,9 +216,13 @@ describe("shared Agent Skills tree", () => {
     expect(vendored.filter((target) => !prose.includes(target))).toEqual([]);
   });
 
-  test("every required portable asset lives inside the skills tree", () => {
+  test("every required portable asset is present and retained by generation", () => {
+    const { files } = plan(repoRoot);
     for (const file of requiredPortableFiles) {
       expect(existsSync(join(skillsDir, file))).toBe(true);
+      expect(files[`plugins/pstack/skills/${file}`]).toBe(
+        readFileSync(join(skillsDir, file), "utf8"),
+      );
     }
   });
 

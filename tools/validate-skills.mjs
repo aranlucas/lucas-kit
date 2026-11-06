@@ -9,9 +9,7 @@ import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 /** @type {ReadonlySet<string>} */
 export const SKIPPED_DIRS = new Set([".git", "node_modules"]);
 
-// Sorted, so reports and scans read the same on every filesystem.
 /**
- * Return sorted files below a directory, excluding dependency and Git directories.
  * @param {string} dir
  * @returns {readonly string[]}
  */
@@ -27,7 +25,6 @@ export function walk(dir) {
 }
 
 /**
- * Return Markdown files in the same deterministic order as walk().
  * @param {string} dir
  * @returns {readonly string[]}
  */

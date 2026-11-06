@@ -62,7 +62,7 @@ import { parse as parseYaml } from "yaml";
 import { Type } from "typebox";
 import { Value } from "typebox/value";
 
-import { code, codeList, PLUGIN, SKILLS } from "./plugin.mjs";
+import { code, codeList, PLUGIN, SKILL_NOTICES, SKILLS } from "./plugin.mjs";
 import { isModelPolicy, usesTier } from "./model-policy.mjs";
 import { RUNTIMES, roleSkills } from "./runtimes.mjs";
 import {
@@ -93,13 +93,10 @@ export const PORTABLE_ASSETS = [
     source: "plugins/pstack/agents/comment-sicko.md",
     target: "poteto-mode/references/agents/comment-sicko.md",
   },
-  { source: "LICENSE", target: "poteto-mode/references/licenses/LICENSE" },
-  {
-    source: "LICENSE-cursor-team-kit",
-    target: "poteto-mode/references/licenses/LICENSE-cursor-team-kit",
-  },
-  { source: "LICENSE-thermos", target: "poteto-mode/references/licenses/LICENSE-thermos" },
-  { source: "NOTICE-skills.md", target: "poteto-mode/references/licenses/NOTICE.md" },
+  ...Object.entries(SKILL_NOTICES).map(([source, filename]) => ({
+    source,
+    target: `poteto-mode/references/licenses/${filename}`,
+  })),
 ];
 
 // The generator removes every entry of these directories that no planned path

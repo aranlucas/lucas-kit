@@ -19,9 +19,10 @@ import { Type } from "typebox";
 import { Value } from "typebox/value";
 import { validateProsePaths, validateSkillsTree, walk } from "./validate-skills.mjs";
 import { runPnpm } from "./pnpm.mjs";
+import { SKILL_NOTICES } from "./plugin.mjs";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
-const notices = ["LICENSE", "LICENSE-cursor-team-kit", "LICENSE-thermos", "NOTICE-skills.md"];
+const notices = Object.keys(SKILL_NOTICES);
 
 // Only name and version drive packaging. Preserve optional metadata verbatim.
 const packageMetadata = Type.Object({

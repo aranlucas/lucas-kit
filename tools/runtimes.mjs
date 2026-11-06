@@ -301,7 +301,6 @@ export function validatePiPackage(text, { pathExists }) {
   }
 }
 
-// The skills that dispatch on role models, which on Copilot need a model sheet.
 /** @param {import("./model-policy.mjs").ResolvedModels} models */
 export const roleSkills = (models) => [...new Set(models.roles.map((r) => r.skill))].sort();
 
